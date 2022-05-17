@@ -1,27 +1,6 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
-mod error;
+mod err;
 mod genomics;
-mod formats;
+mod gff;
 
-use std::{
-    fmt::Display,
-    fs::{File, OpenOptions},
-    io::{BufRead, BufReader},
-    path::Path,
-};
-
-use crate::{
-    error::{TxaseErr, TxaseResult},
-    genomics::prelude::*,
-};
-
-mod tests {
-
-    #[test]
-    fn load_test() {
-        
-    }
-
-}
+#[cfg(test)]
+mod tests {}

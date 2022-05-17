@@ -1,50 +1,43 @@
-use super::codon::Codon;
-use crate::error::TxaseResult;
-use std::{fmt::Display, ops::Index, fs::{File, OpenOptions}, io::{BufRead, BufReader}, path::Path};
+use super::codon::DNACodon;
+use crate::err::TXResult;
+use std::{
+    fmt::Display,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader},
+    ops::Index,
+    path::Path,
+};
 
 #[derive(Debug)]
 pub struct Genome {
-    nucleotides: Vec<Codon>,
+    desc: String,
+    nucleotides: Vec<DNACodon>,
 }
 
 impl Genome {
-    pub fn open_and_parse(
-        path: impl AsRef<Path>,
-        openops: Option<OpenOptions>,
-    ) -> TxaseResult<Genome> {
-        let f: File = if openops.is_some() {
-            openops.unwrap().open(path)?
+    pub fn parse(p: impl AsRef<Path>, ops: Option<OpenOptions>) -> TXResult<Self> {
+        //decouple file parsing and data storage
+        let file = if let Some(o) = ops {
+            o.open(p)?
         } else {
-            File::open(path)?
+            File::open(p)?
         };
-        let size = f.metadata().unwrap().len() as usize;
-        let b_read = BufReader::new(f);
-        let gen = Genome::parse_seq(BufRead::lines(b_read).map(|x| x.unwrap()), size);
-        return Ok(gen);
-    }
-
-    pub fn parsemultiseq(path: impl AsRef<Path>, openops: Option<OpenOptions>) -> Vec<Genome> {
-        let gv: Vec<Genome> = Vec::new();
-        return gv;
-    }
-
-    pub fn parse_seq(lines: impl Iterator<Item = String>, len: usize) -> Genome {
         let mut gen = Genome {
-            nucleotides: Vec::with_capacity(len),
+            desc: String::from(""),
+            nucleotides: Vec::with_capacity(file.metadata()?.len().try_into()?),
         };
-        for line in lines {
-            if line.starts_with(">") || line.starts_with(";") {
+        let buffer = BufReader::new(file);
+        for l in buffer.lines() {
+            let checked = l?;
+            if checked.starts_with('>') || checked.starts_with(';') {
+                gen.desc = checked;
                 continue;
             }
-            for c in line.chars() {
-                gen.add(c)
+            for c in checked.chars() {
+                //gen.add(c)
             }
         }
-        return gen;
-    }
-
-    pub fn add(&mut self, i: impl Into<Codon>) {
-        self.nucleotides.push(i.into())
+        Ok(gen)
     }
 }
 
