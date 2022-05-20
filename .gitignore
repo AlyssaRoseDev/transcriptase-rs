@@ -1,1 +1,4 @@
 /target
+*.fasta
+*.fna
+*.gff

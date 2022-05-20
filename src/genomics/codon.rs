@@ -1,10 +1,6 @@
-use crate::err::{TXError, TXResult};
+use crate::err::TXError;
 use std::fmt::Display;
-use std::{
-    ops::{Deref, DerefMut},
-    result::Result,
-    str::FromStr,
-};
+use std::{result::Result, str::FromStr};
 /*
 These hex representations allow for the representation of IUPAC extended Codons to match to the parallel
 bitwise operations on the Nucleobases, e.g. Amino(M) to be represented as the bitwise OR of Adenine and
@@ -21,7 +17,7 @@ pub const MASK: u8 = 0x0F;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum DNACodon {
+pub enum DNA {
     ZERO = 0x0,
     ADENINE = 0x1,
     CYTOSINE = 0x2,
@@ -40,47 +36,49 @@ pub enum DNACodon {
     ANY = 0xF,
 }
 
-impl Display for DNACodon {
+impl Display for DNA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", DNACODONS[*self as usize])
     }
 }
 
-impl Default for DNACodon {
+impl Default for DNA {
     fn default() -> Self {
         Self::ANY
     }
 }
 
-impl FromStr for DNACodon {
+impl FromStr for DNA {
     type Err = TXError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &*s.to_uppercase() {
-            "0" => Ok(DNACodon::ZERO),
-            "A" => Ok(DNACodon::ADENINE),
-            "C" => Ok(DNACodon::CYTOSINE),
-            "M" => Ok(DNACodon::AMINO),
-            "G" => Ok(DNACodon::GUANINE),
-            "R" => Ok(DNACodon::PURINE),
-            "S" => Ok(DNACodon::STRONG),
-            "V" => Ok(DNACodon::NOTU),
-            "T" => Ok(DNACodon::THYMINE),
-            "W" => Ok(DNACodon::WEAK),
-            "Y" => Ok(DNACodon::PYRIMIDINE),
-            "H" => Ok(DNACodon::NOTG),
-            "K" => Ok(DNACodon::KETO),
-            "D" => Ok(DNACodon::NOTC),
-            "B" => Ok(DNACodon::NOTA),
-            "N" => Ok(DNACodon::ANY),
+            "0" => Ok(DNA::ZERO),
+            "A" => Ok(DNA::ADENINE),
+            "C" => Ok(DNA::CYTOSINE),
+            "M" => Ok(DNA::AMINO),
+            "G" => Ok(DNA::GUANINE),
+            "R" => Ok(DNA::PURINE),
+            "S" => Ok(DNA::STRONG),
+            "V" => Ok(DNA::NOTU),
+            "T" => Ok(DNA::THYMINE),
+            "W" => Ok(DNA::WEAK),
+            "Y" => Ok(DNA::PYRIMIDINE),
+            "H" => Ok(DNA::NOTG),
+            "K" => Ok(DNA::KETO),
+            "D" => Ok(DNA::NOTC),
+            "B" => Ok(DNA::NOTA),
+            "N" => Ok(DNA::ANY),
             _ => Err(TXError::InvalidCodon(String::from(s))),
         }
     }
 }
 
-impl From<char> for DNACodon {
-    fn from(c: char) -> Self {
-        match c {
+impl TryFrom<char> for DNA {
+    type Error = TXError;
+
+    fn try_from(value: char) -> Result<Self, TXError> {
+        Ok(match value {
             '0' => Self::ZERO,
             'A' => Self::ADENINE,
             'C' => Self::CYTOSINE,
@@ -97,19 +95,19 @@ impl From<char> for DNACodon {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => Self::ZERO,
-        }
+            _ => return Err(TXError::InvalidCodon(String::from(value))),
+        })
     }
 }
 
-impl From<DNACodon> for char {
-    fn from(c: DNACodon) -> Self {
-        char::from(DNACODONS[c as usize])
+impl From<DNA> for char {
+    fn from(c: DNA) -> Self {
+        DNACODONS[c as usize] as char
     }
 }
 
-impl From<DNACodon> for u8 {
-    fn from(codon: DNACodon) -> Self {
+impl From<DNA> for u8 {
+    fn from(codon: DNA) -> Self {
         codon as u8
     }
 }
@@ -120,7 +118,7 @@ pub const RNACODONS: [u8; 16] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[allow(clippy::upper_case_acronyms)]
-pub enum RNACodon {
+pub enum RNA {
     ZERO = 0x0,
     ADENINE = 0x1,
     CYTOSINE = 0x2,
@@ -139,47 +137,49 @@ pub enum RNACodon {
     ANY = 0xF,
 }
 
-impl Display for RNACodon {
+impl Display for RNA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", RNACODONS[*self as usize])
     }
 }
 
-impl Default for RNACodon {
+impl Default for RNA {
     fn default() -> Self {
         Self::ANY
     }
 }
 
-impl FromStr for RNACodon {
+impl FromStr for RNA {
     type Err = TXError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &*s.to_uppercase() {
-            "0" => Ok(RNACodon::ZERO),
-            "A" => Ok(RNACodon::ADENINE),
-            "C" => Ok(RNACodon::CYTOSINE),
-            "M" => Ok(RNACodon::AMINO),
-            "G" => Ok(RNACodon::GUANINE),
-            "R" => Ok(RNACodon::PURINE),
-            "S" => Ok(RNACodon::STRONG),
-            "V" => Ok(RNACodon::NOTU),
-            "U" => Ok(RNACodon::URACIL),
-            "W" => Ok(RNACodon::WEAK),
-            "Y" => Ok(RNACodon::PYRIMIDINE),
-            "H" => Ok(RNACodon::NOTG),
-            "K" => Ok(RNACodon::KETO),
-            "D" => Ok(RNACodon::NOTC),
-            "B" => Ok(RNACodon::NOTA),
-            "N" => Ok(RNACodon::ANY),
+            "0" => Ok(RNA::ZERO),
+            "A" => Ok(RNA::ADENINE),
+            "C" => Ok(RNA::CYTOSINE),
+            "M" => Ok(RNA::AMINO),
+            "G" => Ok(RNA::GUANINE),
+            "R" => Ok(RNA::PURINE),
+            "S" => Ok(RNA::STRONG),
+            "V" => Ok(RNA::NOTU),
+            "U" => Ok(RNA::URACIL),
+            "W" => Ok(RNA::WEAK),
+            "Y" => Ok(RNA::PYRIMIDINE),
+            "H" => Ok(RNA::NOTG),
+            "K" => Ok(RNA::KETO),
+            "D" => Ok(RNA::NOTC),
+            "B" => Ok(RNA::NOTA),
+            "N" => Ok(RNA::ANY),
             _ => Err(TXError::InvalidCodon(String::from(s))),
         }
     }
 }
 
-impl From<char> for RNACodon {
-    fn from(c: char) -> Self {
-        match c {
+impl TryFrom<char> for RNA {
+    type Error = TXError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        Ok(match value {
             '0' => Self::ZERO,
             'A' => Self::ADENINE,
             'C' => Self::CYTOSINE,
@@ -196,19 +196,7 @@ impl From<char> for RNACodon {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => Self::ZERO,
-        }
-    }
-}
-
-impl From<RNACodon> for char {
-    fn from(c: RNACodon) -> Self {
-        char::from(RNACODONS[c as usize])
-    }
-}
-
-impl From<RNACodon> for u8 {
-    fn from(codon: RNACodon) -> Self {
-        codon as u8
+            _ => return Err(TXError::InvalidCodon(String::from(value))),
+        })
     }
 }

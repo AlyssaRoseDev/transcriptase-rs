@@ -1,15 +1,12 @@
 use std::str::FromStr;
 
-use nom::{
-    bytes::complete::{is_a, tag},
-    sequence::{terminated, tuple},
-    Parser,
-};
-use nom_supreme::ParserExt;
+use either::Either;
+use nom::{bytes::complete::is_a, Parser};
 
 use crate::err::TXError;
 mod parsers;
 
+#[derive(Debug, Clone)]
 pub struct GFF {
     meta: Vec<Metadata>,
     entries: Vec<Entry>,
@@ -22,10 +19,10 @@ impl GFF {
         for line in src.lines() {
             if line.starts_with('#') {
                 if let Some(metadata) = Metadata::parse(line)? {
-                    meta.push(metadata)
+                    meta.push(metadata);
                 }
             } else {
-                entries.push(Entry::parse(line)?)
+                entries.push(Entry::parse(line)?);
             }
         }
 
@@ -33,6 +30,7 @@ impl GFF {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Metadata {
     Pragma(String),
     Other(String),
@@ -49,6 +47,7 @@ impl Metadata {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Entry {
     pub(crate) seq_id: String,
     pub(crate) source: String,
@@ -56,42 +55,34 @@ pub struct Entry {
     pub(crate) range: (usize, usize),
     pub(crate) score: Option<f64>,
     pub(crate) strand: char,
-    pub(crate) phase: Option<char>,
-    pub(crate) attrs: Vec<String>,
+    pub(crate) phase: Option<u8>,
+    pub(crate) attrs: (Option<Id>, Vec<Attribute>),
 }
 
 impl Entry {
     // GFF Entry line:
-    // {seq_id} {source} {type} {start} {end} {score} {strand} {phase} {attributes[]}
+    // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
     pub(crate) fn parse(src: &str) -> crate::err::TXResult<Self> {
-        let (
-            _,
-            (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes),
-        ) = tuple((
-            terminated(parsers::seq_id, tag("\t")),
-            terminated(parsers::source, tag("\t")),
-            terminated(parsers::feature_type, tag("\t")),
-            terminated(parsers::range_bound, tag("\t")),
-            terminated(parsers::range_bound, tag("\t")),
-            terminated(parsers::score, tag("\t")),
-            terminated(parsers::strand, tag("\t")),
-            terminated(parsers::phase, tag("\t")),
-            parsers::attributes,
-        ))
-        .all_consuming()
-        .parse(src)?;
+        let (_, raw) = parsers::entry(src)?;
+        let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
+            raw;
+        let mut id = None;
+        let mut attrs = Vec::new();
+        for &attr in &attributes {
+            match Attribute::parse(attr)? {
+                Either::Left(attribute) => attrs.push(attribute),
+                Either::Right(id_attr) => id = Some(id_attr),
+            }
+        }
         Ok(Self {
             seq_id: String::from(seq),
             source: String::from(source),
             feature_type: String::from(feature_type),
-            range: (str::parse(range_start)?, str::parse(range_end)?),
+            range: (range_start, range_end),
             score,
             strand,
             phase,
-            attrs: attributes
-                .iter()
-                .map(|&src: &&str| String::from(src))
-                .collect(),
+            attrs: (id, attrs),
         })
     }
 }
@@ -101,6 +92,45 @@ impl FromStr for Entry {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Entry::parse(s)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Attribute {
+    tag: AttrKind,
+    value: String,
+}
+
+impl Attribute {
+    pub(crate) fn parse(src: &str) -> crate::err::TXResult<Either<Self, Id>> {
+        let (tag, value) = src
+            .split_once('=')
+            .ok_or_else(|| TXError::NomParsing(String::from("")))
+            .map(|(tag, val)| (tag, String::from(val)))?;
+        Ok(if tag == "ID" {
+            Either::Right(Id(value))
+        } else {
+            Either::Left(Self {
+                tag: AttrKind::parse(tag),
+                value,
+            })
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Id(String);
+
+#[derive(Debug, Clone)]
+pub enum AttrKind {
+    Other(String),
+}
+
+impl AttrKind {
+    pub(crate) fn parse(src: &str) -> Self {
+        match src {
+            _ => Self::Other(String::from(src)),
+        }
     }
 }
 
@@ -188,7 +218,7 @@ mod test {
         let mut file = std::fs::File::open(
             r#"E:\Projects\sars-cov-2\transcriptase\GCF_009858895.2_ASM985889v3_genomic.gff"#,
         )?;
-        let mut src = String::with_capacity(file.metadata()?.len() as usize);
+        let mut src = String::with_capacity(file.metadata()?.len().try_into()?);
         file.read_to_string(&mut src)?;
         super::GFF::parse(&src)?;
         Ok(())
