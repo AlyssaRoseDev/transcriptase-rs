@@ -39,16 +39,16 @@ impl GFF {
 
 #[derive(Debug, Clone)]
 pub enum Metadata {
-    Pragma(String),
-    Other(String),
+    Pragma(Box<str>),
+    Other(Box<str>),
 }
 
 impl Metadata {
     pub(crate) fn parse(src: &str) -> TXResult<Option<Self>> {
         let (tag, meta) = is_a("#").parse(src)?;
         Ok(match tag {
-            "##" => Some(Self::Pragma(String::from(meta))),
-            "#" => Some(Self::Other(String::from(meta))),
+            "##" => Some(Self::Pragma(meta.into())),
+            "#" => Some(Self::Other(meta.into())),
             _ => None,
         })
     }
@@ -56,15 +56,15 @@ impl Metadata {
 
 #[derive(Debug, Clone)]
 pub struct Entry {
-    pub(crate) seq_id: Box<str>,
-    pub(crate) source: Box<str>,
-    pub(crate) feature_type: Box<str>,
-    pub(crate) range: (usize, usize),
-    pub(crate) score: Option<f64>,
-    pub(crate) strand: Option<Strand>,
-    pub(crate) phase: Option<u8>,
-    pub(crate) id: Option<Id>,
-    pub(crate) attrs: Vec<Attribute>,
+    pub seq_id: Box<str>,
+    pub source: Box<str>,
+    pub feature_type: Box<str>,
+    pub range: (usize, usize),
+    pub score: Option<f64>,
+    pub strand: Option<Strand>,
+    pub phase: Option<u8>,
+    pub id: Option<Id>,
+    pub attrs: Vec<Attribute>,
 }
 
 impl Entry {
@@ -90,8 +90,8 @@ impl Entry {
         }
         Ok(Self {
             seq_id: seq.into(),
-            source: seq.into(),
-            feature_type: seq.into(),
+            source: source.into(),
+            feature_type: feature_type.into(),
             range: (range_start, range_end),
             score,
             strand: strand.map(Strand::parse).transpose()?,

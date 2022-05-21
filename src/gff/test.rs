@@ -82,6 +82,6 @@ fn full() -> TXResult<()> {
     )?;
     let mut src = String::with_capacity(file.metadata()?.len().try_into()?);
     file.read_to_string(&mut src)?;
-    super::GFF::parse(&src)?;
+    dbg!(super::GFF::parse(&src)?);
     Ok(())
 }

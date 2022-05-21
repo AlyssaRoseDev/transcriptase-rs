@@ -6,13 +6,14 @@ use std::{fmt::Display, ops::Index};
 pub struct DnaSeq(Vec<DNA>);
 
 impl Sequence for DnaSeq {
-    type ParseError = TXError;
-
     type Inner = DNA;
 
-    fn parse(src: &str) -> Result<Self, Self::ParseError> {
-        let mut sequence = Vec::new();
-        Ok(Self(sequence))
+    fn parse(src: &str) -> Result<Self, TXError> {
+        Ok(Self(
+            src.lines()
+                .flat_map(|line| line.chars().map(DNA::try_from))
+                .collect::<Result<Vec<DNA>, TXError>>()?,
+        ))
     }
 
     fn extend<I: IntoIterator<Item = Self::Inner>>(&mut self, iter: I) {
@@ -44,6 +45,6 @@ impl Display for DnaSeq {
                 ret
             })
             .collect::<Result<Vec<()>, std::fmt::Error>>()?;
-        return Ok(());
+        Ok(())
     }
 }
