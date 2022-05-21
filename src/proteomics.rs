@@ -65,14 +65,17 @@ impl AminoAcid {
         "Pyrrolysine",
     ];
 
+    #[must_use]
     pub fn abbreviation(&self) -> &'static str {
         Self::ABBREV[*self as usize]
     }
 
+    #[must_use]
     pub fn short(&self) -> char {
         Self::SHORT[*self as usize]
     }
 
+    #[must_use]
     pub fn long(&self) -> &'static str {
         Self::LONG[*self as usize]
     }

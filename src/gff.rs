@@ -3,7 +3,9 @@ use std::str::FromStr;
 use either::Either;
 use nom::{bytes::complete::is_a, Parser};
 
-use crate::err::TXError;
+use crate::err::{TXError, TXResult};
+
+use self::parsers::strand;
 mod parsers;
 
 #[derive(Debug, Clone)]
@@ -13,7 +15,7 @@ pub struct GFF {
 }
 
 impl GFF {
-    pub fn parse(src: &str) -> crate::err::TXResult<Self> {
+    pub fn parse(src: &str) -> TXResult<Self> {
         let mut meta = Vec::new();
         let mut entries = Vec::new();
         for line in src.lines() {
@@ -37,7 +39,7 @@ pub enum Metadata {
 }
 
 impl Metadata {
-    pub(crate) fn parse(src: &str) -> crate::err::TXResult<Option<Self>> {
+    pub(crate) fn parse(src: &str) -> TXResult<Option<Self>> {
         let (tag, meta) = is_a("#").parse(src)?;
         Ok(match tag {
             "##" => Some(Self::Pragma(String::from(meta))),
@@ -49,9 +51,9 @@ impl Metadata {
 
 #[derive(Debug, Clone)]
 pub struct Entry {
-    pub(crate) seq_id: String,
-    pub(crate) source: String,
-    pub(crate) feature_type: String,
+    pub(crate) seq_id: Box<str>,
+    pub(crate) source: Box<str>,
+    pub(crate) feature_type: Box<str>,
     pub(crate) range: (usize, usize),
     pub(crate) score: Option<f64>,
     pub(crate) strand: char,
@@ -62,7 +64,7 @@ pub struct Entry {
 impl Entry {
     // GFF Entry line:
     // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
-    pub(crate) fn parse(src: &str) -> crate::err::TXResult<Self> {
+    pub(crate) fn parse(src: &str) -> TXResult<Self> {
         let (_, raw) = parsers::entry(src)?;
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
             raw;
@@ -71,13 +73,19 @@ impl Entry {
         for &attr in &attributes {
             match Attribute::parse(attr)? {
                 Either::Left(attribute) => attrs.push(attribute),
-                Either::Right(id_attr) => id = Some(id_attr),
+                Either::Right(id_attr) => {
+                    if id.is_none() {
+                        id = Some(id_attr);
+                    } else {
+                        return Err(TXError::DuplicateGFFEntryID());
+                    }
+                }
             }
         }
         Ok(Self {
-            seq_id: String::from(seq),
-            source: String::from(source),
-            feature_type: String::from(feature_type),
+            seq_id: String::from(seq).into_boxed_str(),
+            source: String::from(source).into_boxed_str(),
+            feature_type: String::from(feature_type).into_boxed_str(),
             range: (range_start, range_end),
             score,
             strand,
@@ -95,42 +103,67 @@ impl FromStr for Entry {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Attribute {
-    tag: AttrKind,
-    value: String,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Id(Box<str>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Attribute {
+    Name(Box<str>),
+    Alias(Box<str>),
+    Parent(Vec<Id>),
+    Target {
+        target_id: Id,
+        start: usize,
+        end: usize,
+        strand: Option<char>,
+    },
+    Gap(char),
+    DerivesFrom(Id),
+    Note(Box<str>),
+    DbxRef(Box<str>),
+    OntologyTerm(Box<str>),
+    IsCircular(bool),
+    Other(Box<str>),
 }
 
 impl Attribute {
-    pub(crate) fn parse(src: &str) -> crate::err::TXResult<Either<Self, Id>> {
-        let (tag, value) = src
-            .split_once('=')
-            .ok_or_else(|| TXError::NomParsing(String::from("")))
-            .map(|(tag, val)| (tag, String::from(val)))?;
+    pub(crate) fn parse(src: &str) -> TXResult<Either<Self, Id>> {
+        let (tag, value) = src.split_once('=').ok_or_else(|| {
+            TXError::NomParsing(format!("Invalid attribute, expected tag=value, got {src}"))
+        })?;
         Ok(if tag == "ID" {
-            Either::Right(Id(value))
+            Either::Right(Id(value.to_string().into_boxed_str()))
         } else {
-            Either::Left(Self {
-                tag: AttrKind::parse(tag),
-                value,
-            })
+            Either::Left(Self::parse_kind(tag, value)?)
         })
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Id(String);
-
-#[derive(Debug, Clone)]
-pub enum AttrKind {
-    Other(String),
-}
-
-impl AttrKind {
-    pub(crate) fn parse(src: &str) -> Self {
-        match src {
-            _ => Self::Other(String::from(src)),
-        }
+    pub(crate) fn parse_kind(src: &str, value: &str) -> TXResult<Self> {
+        Ok(match src {
+            "Name" => Self::Name(value.to_string().into_boxed_str()),
+            "Alias" => Self::Alias(value.to_string().into_boxed_str()),
+            "Parent" => Self::Parent(value.split(',').map(|s| Id(s.to_string().into_boxed_str())).collect()),
+            "Target" => {
+                let mut parts = value.split(' ');
+                let target_id = Id(parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?.to_string().into_boxed_str());
+                let start = parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
+                let end = parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
+                let strand = if let Some(st) = parts.next() {
+                    Some(strand(st).map(|(_, strand)| strand)?)
+                } else {
+                    None
+                };
+                Self::Target { target_id, start, end, strand }
+            },
+            "Gap" => todo!(),
+            "Derives_from" => todo!(),
+            "Note" => todo!(),
+            "Dbxref" => todo!(),
+            "Ontology_term" => todo!(),
+            "Is_circular" => todo!(),
+            tag if tag.chars().next().ok_or_else(|| TXError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
+            _ => Self::Other(String::from(src).into_boxed_str()),
+        })
     }
 }
 

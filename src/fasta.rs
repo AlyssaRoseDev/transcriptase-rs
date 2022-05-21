@@ -20,7 +20,10 @@ impl<T: Sequence> Fasta<T> {
     }
 }
 
-pub trait Sequence where Self: Index<usize> + Sized {
+pub trait Sequence
+where
+    Self: Index<usize> + Sized,
+{
     type ParseError;
     type Inner;
 

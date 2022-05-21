@@ -21,6 +21,8 @@ pub enum TXError {
     InvalidAttribute(String),
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput(),
+    #[error("Encountered Duplicate Id Attribute in GFF Entry")]
+    DuplicateGFFEntryID(),
 }
 
 impl From<nom_supreme::error::ErrorTree<&str>> for TXError {
