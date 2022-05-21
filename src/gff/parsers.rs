@@ -50,9 +50,13 @@ pub(crate) fn score(src: &str) -> IResult<&str, Option<f64>, ErrorTree<&str>> {
     undefined(src).or_else(|_| double(src).map(|(rem, score)| (rem, Some(score))))
 }
 
-pub(crate) fn strand(src: &str) -> IResult<&str, char, ErrorTree<&str>> {
+pub(crate) fn strand(src: &str) -> IResult<&str, Option<char>, ErrorTree<&str>> {
     const VALID: &str = "+-.?";
-    one_of(VALID).parse(src)
+    undefined(src).or_else(|_| {
+        one_of(VALID)
+            .parse(src)
+            .map(|(rem, strand)| (rem, Some(strand)))
+    })
 }
 
 pub(crate) fn phase(src: &str) -> IResult<&str, Option<u8>, ErrorTree<&str>> {
@@ -83,7 +87,7 @@ type RawEntry<'a> = (
     usize,
     usize,
     Option<f64>,
-    char,
+    Option<char>,
     Option<u8>,
     Vec<&'a str>,
 );
