@@ -3,10 +3,10 @@ use thiserror::Error;
 pub type TXResult<T, E = TXError> = Result<T, E>;
 #[derive(Debug, Error)]
 pub enum TXError {
-    #[error("Invalid codon: {0:?}")]
-    InvalidCodon(String),
+    #[error("Invalid nucleotide: {0:?}")]
+    InvalidNucleotide(String),
     #[error("Invalid amino acid: {0:?}")]
-    InvalidAminoAcid(String),
+    InvalidCodon(String),
     #[error("IO Error: {0:?}")]
     BadFile(#[from] std::io::Error),
     #[error("Numeric conversion failed: {0:?}")]
@@ -42,18 +42,6 @@ type NomTreeErr<'a> = nom::Err<
 
 impl From<NomTreeErr<'_>> for TXError {
     fn from(src: NomTreeErr) -> Self {
-        Self::NomParsing(src.to_string())
-    }
-}
-
-impl From<&NomTreeErr<'_>> for TXError {
-    fn from(src: &NomTreeErr) -> Self {
-        Self::NomParsing(src.to_string())
-    }
-}
-
-impl From<&mut NomTreeErr<'_>> for TXError {
-    fn from(src: &mut NomTreeErr) -> Self {
         Self::NomParsing(src.to_string())
     }
 }

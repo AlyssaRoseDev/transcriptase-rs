@@ -35,6 +35,14 @@ impl GFF {
         }
         inner(src.as_ref())
     }
+
+    pub fn metadata(&self) -> &Vec<Metadata> {
+        &self.meta
+    }
+
+    pub fn entries(&self) -> &Vec<Entry> {
+        &self.entries
+    }
 }
 
 #[derive(Debug, Clone)]

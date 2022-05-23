@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::err::TXError;
+use crate::err::{TXError, TXResult};
+
+use self::translation::{RNA_TRANSLATION_TABLE, DNA_TRANSLATION_TABLE};
+mod translation;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AminoAcid {
@@ -26,20 +29,21 @@ pub enum AminoAcid {
     Valine,
     Selenocysteine,
     Pyrrolysine,
+    Stop,
 }
 
 impl AminoAcid {
-    const ABBREV: [&'static str; 22] = [
+    const ABBREV: [&'static str; 23] = [
         "Ala", "Arg", "Asn", "Asp", "Cys", "Gln", "Glu", "Gly", "His", "Ile", "Leu", "Lys", "Met",
-        "Phe", "Pro", "Ser", "Thr", "Trp", "Tyr", "Val", "Sec", "Pyl",
+        "Phe", "Pro", "Ser", "Thr", "Trp", "Tyr", "Val", "Sec", "Pyl", "Ter",
     ];
 
-    const SHORT: [char; 22] = [
+    const SHORT: [char; 23] = [
         'A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W',
-        'Y', 'V', 'U', 'O',
+        'Y', 'V', 'U', 'O', '*',
     ];
 
-    const LONG: [&'static str; 22] = [
+    const LONG: [&'static str; 23] = [
         "Alanine",
         "Arginine",
         "Asparagine",
@@ -62,6 +66,7 @@ impl AminoAcid {
         "Valine",
         "Selenocysteine",
         "Pyrrolysine",
+        "Translation Stop",
     ];
 
     #[must_use]
@@ -77,6 +82,18 @@ impl AminoAcid {
     #[must_use]
     pub fn long(&self) -> &'static str {
         Self::LONG[*self as usize]
+    }
+
+    pub fn translate_rna(codon: &str) -> TXResult<Self> {
+        RNA_TRANSLATION_TABLE.get(codon).copied().ok_or_else(|| {
+            TXError::InvalidCodon(codon.to_string())
+        })
+    }
+
+    pub fn translate_dna(codon: &str) -> TXResult<Self> {
+        DNA_TRANSLATION_TABLE.get(codon).copied().ok_or_else(|| {
+            TXError::InvalidCodon(codon.to_string())
+        })
     }
 }
 
@@ -107,7 +124,8 @@ impl FromStr for AminoAcid {
             "Valine" | "Val" | "V" => Self::Valine,
             "Selenocysteine" | "Sec" | "U" => Self::Selenocysteine,
             "Pyrrolysine" | "Pyl" | "O" => Self::Pyrrolysine,
-            _ => return Err(TXError::InvalidAminoAcid(String::from(s))),
+            "Amber" | "Ochre" | "Umber" | "Opal" | "Ter" => Self::Stop,
+            _ => return Err(TXError::InvalidCodon(String::from(s))),
         })
     }
 }
@@ -139,7 +157,8 @@ impl TryFrom<char> for AminoAcid {
             'V' => Self::Valine,
             'U' => Self::Selenocysteine,
             'O' => Self::Pyrrolysine,
-            val => return Err(TXError::InvalidAminoAcid(val.to_string())),
+            '*' => Self::Stop,
+            val => return Err(TXError::InvalidCodon(val.to_string())),
         })
     }
 }

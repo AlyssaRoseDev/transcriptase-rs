@@ -10,11 +10,11 @@ This would be reversed (aka bitwise NOT of the mask) to read the Codon at the hi
 Codon, this is 2 per byte, or 0.5 KB per Kbp. This makes the Human Genome (approx. 6.2 Gbp) 3.1 GB
 */
 ///CODONS stores the ASCII encoding of the representative characters for each supported nucleobase
-pub const DNACODONS: [u8; 16] = [
+pub const DNA_CODONS: [u8; 16] = [
     b'0', b'A', b'C', b'M', b'G', b'R', b'S', b'V', b'T', b'W', b'Y', b'H', b'K', b'D', b'B', b'N',
 ];
 pub const MASK: u8 = 0x0F;
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DNA {
@@ -38,7 +38,7 @@ pub enum DNA {
 
 impl Display for DNA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", DNACODONS[*self as usize])
+        write!(f, "{}", DNA_CODONS[*self as usize])
     }
 }
 
@@ -69,7 +69,7 @@ impl FromStr for DNA {
             "D" => Ok(DNA::NOTC),
             "B" => Ok(DNA::NOTA),
             "N" => Ok(DNA::ANY),
-            _ => Err(TXError::InvalidCodon(String::from(s))),
+            _ => Err(TXError::InvalidNucleotide(String::from(s))),
         }
     }
 }
@@ -95,14 +95,40 @@ impl TryFrom<char> for DNA {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => return Err(TXError::InvalidCodon(String::from(value))),
+            _ => return Err(TXError::InvalidNucleotide(String::from(value))),
+        })
+    }
+}
+
+impl TryFrom<u8> for DNA {
+    type Error = TXError;
+
+    fn try_from(value: u8) -> Result<Self, TXError> {
+        Ok(match value {
+            0x0 => Self::ZERO,
+            0x1 => Self::ADENINE,
+            0x2 => Self::CYTOSINE,
+            0x3 => Self::AMINO,
+            0x4 => Self::GUANINE,
+            0x5 => Self::PURINE,
+            0x6 => Self::STRONG,
+            0x7 => Self::NOTU,
+            0x8 => Self::THYMINE,
+            0x9 => Self::WEAK,
+            0xA => Self::PYRIMIDINE,
+            0xB => Self::NOTG,
+            0xC => Self::KETO,
+            0xD => Self::NOTC,
+            0xE => Self::NOTA,
+            0xF => Self::ANY,
+            _ => return Err(TXError::InvalidNucleotide(format!("{value}"))),
         })
     }
 }
 
 impl From<DNA> for char {
     fn from(c: DNA) -> Self {
-        DNACODONS[c as usize] as char
+        DNA_CODONS[c as usize] as char
     }
 }
 
@@ -112,10 +138,10 @@ impl From<DNA> for u8 {
     }
 }
 
-pub const RNACODONS: [u8; 16] = [
+pub const RNA_CODONS: [u8; 16] = [
     b'0', b'A', b'C', b'M', b'G', b'R', b'S', b'V', b'U', b'W', b'Y', b'H', b'K', b'D', b'B', b'N',
 ];
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum RNA {
@@ -139,7 +165,7 @@ pub enum RNA {
 
 impl Display for RNA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", RNACODONS[*self as usize])
+        write!(f, "{}", RNA_CODONS[*self as usize])
     }
 }
 
@@ -170,7 +196,7 @@ impl FromStr for RNA {
             "D" => Ok(RNA::NOTC),
             "B" => Ok(RNA::NOTA),
             "N" => Ok(RNA::ANY),
-            _ => Err(TXError::InvalidCodon(String::from(s))),
+            _ => Err(TXError::InvalidNucleotide(String::from(s))),
         }
     }
 }
@@ -196,7 +222,33 @@ impl TryFrom<char> for RNA {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => return Err(TXError::InvalidCodon(String::from(value))),
+            _ => return Err(TXError::InvalidNucleotide(String::from(value))),
+        })
+    }
+}
+
+impl TryFrom<u8> for RNA {
+    type Error = TXError;
+
+    fn try_from(value: u8) -> Result<Self, TXError> {
+        Ok(match value {
+            0x0 => Self::ZERO,
+            0x1 => Self::ADENINE,
+            0x2 => Self::CYTOSINE,
+            0x3 => Self::AMINO,
+            0x4 => Self::GUANINE,
+            0x5 => Self::PURINE,
+            0x6 => Self::STRONG,
+            0x7 => Self::NOTU,
+            0x8 => Self::URACIL,
+            0x9 => Self::WEAK,
+            0xA => Self::PYRIMIDINE,
+            0xB => Self::NOTG,
+            0xC => Self::KETO,
+            0xD => Self::NOTC,
+            0xE => Self::NOTA,
+            0xF => Self::ANY,
+            _ => return Err(TXError::InvalidNucleotide(format!("{value}"))),
         })
     }
 }
