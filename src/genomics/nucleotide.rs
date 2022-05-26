@@ -127,8 +127,20 @@ impl TryFrom<u8> for DNA {
 }
 
 impl From<DNA> for char {
-    fn from(c: DNA) -> Self {
-        DNA_CODONS[c as usize] as char
+    fn from(dna: DNA) -> Self {
+        DNA_CODONS[dna as usize] as char
+    }
+}
+
+impl From<&DNA> for char {
+    fn from(dna: &DNA) -> Self {
+        DNA_CODONS[*dna as usize] as char
+    }
+}
+
+impl From<&mut DNA> for char {
+    fn from(dna: &mut DNA) -> Self {
+        DNA_CODONS[*dna as usize] as char
     }
 }
 
@@ -250,5 +262,29 @@ impl TryFrom<u8> for RNA {
             0xF => Self::ANY,
             _ => return Err(TXError::InvalidNucleotide(format!("{value}"))),
         })
+    }
+}
+
+impl From<RNA> for char {
+    fn from(rna: RNA) -> Self {
+        RNA_CODONS[rna as usize] as char
+    }
+}
+
+impl From<&RNA> for char {
+    fn from(rna: &RNA) -> Self {
+        RNA_CODONS[*rna as usize] as char
+    }
+}
+
+impl From<&mut RNA> for char {
+    fn from(rna: &mut RNA) -> Self {
+        RNA_CODONS[*rna as usize] as char
+    }
+}
+
+impl From<RNA> for u8 {
+    fn from(rna: RNA) -> Self {
+        rna as u8
     }
 }

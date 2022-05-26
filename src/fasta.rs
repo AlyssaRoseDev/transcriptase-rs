@@ -27,6 +27,14 @@ impl<T: Sequence> Fasta<T> {
             })
         }
     }
+
+    pub fn description(&self) -> &Option<Box<str>> {
+        &self.description
+    }
+
+    pub fn sequence(&self) -> &T {
+        &self.sequence
+    }
 }
 
 pub(crate) fn comment(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {

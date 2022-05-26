@@ -1,3 +1,4 @@
+#[allow(clippy::enum_glob_use)]
 use super::AminoAcid::{self, *};
 use phf::{phf_map, Map};
 

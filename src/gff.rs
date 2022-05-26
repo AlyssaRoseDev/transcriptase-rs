@@ -36,10 +36,12 @@ impl GFF {
         inner(src.as_ref())
     }
 
+    #[must_use]
     pub fn metadata(&self) -> &Vec<Metadata> {
         &self.meta
     }
 
+    #[must_use]
     pub fn entries(&self) -> &Vec<Entry> {
         &self.entries
     }
@@ -47,16 +49,16 @@ impl GFF {
 
 #[derive(Debug, Clone)]
 pub enum Metadata {
-    Pragma(Box<str>),
-    Other(Box<str>),
+    Pragma(UnescapedString),
+    Other(UnescapedString),
 }
 
 impl Metadata {
     pub(crate) fn parse(src: &str) -> TXResult<Option<Self>> {
         let (tag, meta) = is_a("#").parse(src)?;
         Ok(match tag {
-            "##" => Some(Self::Pragma(meta.into())),
-            "#" => Some(Self::Other(meta.into())),
+            "##" => Some(Self::Pragma(UnescapedString::new(meta)?)),
+            "#" => Some(Self::Other(UnescapedString::new(meta)?)),
             _ => None,
         })
     }
@@ -64,9 +66,9 @@ impl Metadata {
 
 #[derive(Debug, Clone)]
 pub struct Entry {
-    pub seq_id: Box<str>,
-    pub source: Box<str>,
-    pub feature_type: Box<str>,
+    pub seq_id: UnescapedString,
+    pub source: UnescapedString,
+    pub feature_type: UnescapedString,
     pub range: (usize, usize),
     pub score: Option<f64>,
     pub strand: Option<Strand>,
@@ -97,9 +99,9 @@ impl Entry {
             }
         }
         Ok(Self {
-            seq_id: seq.into(),
-            source: source.into(),
-            feature_type: feature_type.into(),
+            seq_id: UnescapedString::new(seq)?,
+            source: UnescapedString::new(source)?,
+            feature_type: UnescapedString::new(feature_type)?,
             range: (range_start, range_end),
             score,
             strand: strand.map(Strand::parse).transpose()?,
@@ -132,10 +134,30 @@ impl Strand {
             '-' => Self::Negative,
             '?' => Self::Unknown,
             _ => {
-                return Err(TXError::NomParsing(format!(
+                return Err(TXError::InternalParseFailure(format!(
                     "Unexpected Strand kind, expected one of: ['+', '-', '?'], got {src}"
                 )))
             }
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnescapedString(Box<str>);
+
+impl UnescapedString {
+    pub fn new(src: &str) -> TXResult<Self> {
+        if src.contains('%') {
+            let mut escaped = src.to_owned();
+            while let Some(at) = escaped.find('%') {
+                let old = &escaped[at..][..3];
+                let byte = &[u8::from_str_radix(&old[1..3], 16)?];
+                let new = std::str::from_utf8(byte)?;
+                escaped = escaped.replace(old, new);
+            }
+            Ok(Self(escaped.into_boxed_str()))
+        } else {
+            Ok(Self(src.into()))
+        }
     }
 }

@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::{ops::{Index, IndexMut}, fmt::Display};
 
 use crate::{err::TXError, fasta::Sequence};
 
@@ -16,6 +16,12 @@ impl Index<usize> for Proteome {
     }
 }
 
+impl IndexMut<usize> for Proteome {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
 impl Sequence for Proteome {
     type Inner = AminoAcid;
 
@@ -28,10 +34,22 @@ impl Sequence for Proteome {
     }
 
     fn extend<I: IntoIterator<Item = Self::Inner>>(&mut self, iter: I) {
-        self.0.extend(iter)
+        self.0.extend(iter);
     }
 
     fn serialize(self) -> String {
         todo!()
+    }
+}
+
+impl Display for Proteome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut line = String::with_capacity(60);
+        for chunk in self.0.chunks(60) {
+            line.extend(chunk.iter().map(char::from));
+            writeln!(f, "{line}")?;
+            line.clear();
+        }
+        Ok(())
     }
 }

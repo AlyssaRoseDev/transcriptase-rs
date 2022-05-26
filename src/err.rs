@@ -1,3 +1,5 @@
+use std::str::Utf8Error;
+
 use thiserror::Error;
 
 pub type TXResult<T, E = TXError> = Result<T, E>;
@@ -23,12 +25,10 @@ pub enum TXError {
     UnexpectedEndOfInput(),
     #[error("Encountered Duplicate Id Attribute in GFF Entry")]
     DuplicateGFFEntryID(),
-}
-
-impl From<nom_supreme::error::ErrorTree<&str>> for TXError {
-    fn from(src: nom_supreme::error::ErrorTree<&str>) -> Self {
-        Self::NomParsing(src.to_string())
-    }
+    #[error("{0}")]
+    InvalidUTF8(#[from] Utf8Error),
+    #[error("{0}")]
+    InternalParseFailure(String),
 }
 
 type NomTreeErr<'a> = nom::Err<

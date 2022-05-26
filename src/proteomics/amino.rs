@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use crate::err::{TXError, TXResult};
 
-use self::translation::{RNA_TRANSLATION_TABLE, DNA_TRANSLATION_TABLE};
+use self::translation::{DNA_TRANSLATION_TABLE, RNA_TRANSLATION_TABLE};
 mod translation;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+#[allow(clippy::module_name_repetitions)]
 pub enum AminoAcid {
     Alanine,
     Arginine,
@@ -70,30 +71,32 @@ impl AminoAcid {
     ];
 
     #[must_use]
-    pub fn abbreviation(&self) -> &'static str {
-        Self::ABBREV[*self as usize]
+    pub fn abbreviation(self) -> &'static str {
+        Self::ABBREV[self as usize]
     }
 
     #[must_use]
-    pub fn short(&self) -> char {
-        Self::SHORT[*self as usize]
+    pub fn short(self) -> char {
+        Self::SHORT[self as usize]
     }
 
     #[must_use]
-    pub fn long(&self) -> &'static str {
-        Self::LONG[*self as usize]
+    pub fn long(self) -> &'static str {
+        Self::LONG[self as usize]
     }
 
     pub fn translate_rna(codon: &str) -> TXResult<Self> {
-        RNA_TRANSLATION_TABLE.get(codon).copied().ok_or_else(|| {
-            TXError::InvalidCodon(codon.to_string())
-        })
+        RNA_TRANSLATION_TABLE
+            .get(codon)
+            .copied()
+            .ok_or_else(|| TXError::InvalidCodon(codon.to_string()))
     }
 
     pub fn translate_dna(codon: &str) -> TXResult<Self> {
-        DNA_TRANSLATION_TABLE.get(codon).copied().ok_or_else(|| {
-            TXError::InvalidCodon(codon.to_string())
-        })
+        DNA_TRANSLATION_TABLE
+            .get(codon)
+            .copied()
+            .ok_or_else(|| TXError::InvalidCodon(codon.to_string()))
     }
 }
 
@@ -124,8 +127,12 @@ impl FromStr for AminoAcid {
             "Valine" | "Val" | "V" => Self::Valine,
             "Selenocysteine" | "Sec" | "U" => Self::Selenocysteine,
             "Pyrrolysine" | "Pyl" | "O" => Self::Pyrrolysine,
-            "Amber" | "Ochre" | "Umber" | "Opal" | "Ter" => Self::Stop,
-            _ => return Err(TXError::InvalidCodon(String::from(s))),
+            "Amber" | "Ochre" | "Umber" | "Opal" | "Ter" | "*" => Self::Stop,
+            _ => {
+                return Err(TXError::InternalParseFailure(format!(
+                    "Failed to parse {s} as an Amino Acid"
+                )))
+            }
         })
     }
 }
@@ -158,7 +165,29 @@ impl TryFrom<char> for AminoAcid {
             'U' => Self::Selenocysteine,
             'O' => Self::Pyrrolysine,
             '*' => Self::Stop,
-            val => return Err(TXError::InvalidCodon(val.to_string())),
+            val => {
+                return Err(TXError::InternalParseFailure(format!(
+                    "Failed to parse {val} as an Amino Acid"
+                )))
+            }
         })
+    }
+}
+
+impl From<AminoAcid> for char {
+    fn from(aa: AminoAcid) -> Self {
+        aa.short()
+    }
+}
+
+impl From<&AminoAcid> for char {
+    fn from(aa: &AminoAcid) -> Self {
+        aa.short()
+    }
+}
+
+impl From<&mut AminoAcid> for char {
+    fn from(aa: &mut AminoAcid) -> Self {
+        aa.short()
     }
 }

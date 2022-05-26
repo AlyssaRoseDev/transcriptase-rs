@@ -1,9 +1,12 @@
 use super::{
-    codon::DNA,
-    prelude::{DNA_CODONS, RNA, RNA_CODONS},
+    nucleotide::DNA,
+    prelude::{DNA_CODONS, RNA},
 };
 use crate::{err::TXError, fasta::Sequence};
-use std::{fmt::Display, ops::Index};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 #[derive(Debug)]
 pub struct DnaSeq(Vec<DNA>);
@@ -20,11 +23,11 @@ impl Sequence for DnaSeq {
     }
 
     fn extend<I: IntoIterator<Item = Self::Inner>>(&mut self, iter: I) {
-        self.0.extend(iter)
+        self.0.extend(iter);
     }
 
     fn serialize(self) -> String {
-        todo!()
+        self.to_string()
     }
 }
 
@@ -36,18 +39,20 @@ impl Index<usize> for DnaSeq {
     }
 }
 
+impl IndexMut<usize> for DnaSeq {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
 impl Display for DnaSeq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut line = String::with_capacity(60);
-        self.0
-            .chunks(60)
-            .map(|chunk| {
-                line.extend(chunk.iter().map(|c| DNA_CODONS[*c as usize] as char));
-                let ret = writeln!(f, "{line}");
-                line.clear();
-                ret
-            })
-            .collect::<Result<Vec<()>, std::fmt::Error>>()?;
+        for chunk in self.0.chunks(60) {
+            line.extend(chunk.iter().map(|c| DNA_CODONS[*c as usize] as char));
+            writeln!(f, "{line}")?;
+            line.clear();
+        }
         Ok(())
     }
 }
@@ -67,11 +72,11 @@ impl Sequence for RnaSeq {
     }
 
     fn extend<I: IntoIterator<Item = Self::Inner>>(&mut self, iter: I) {
-        self.0.extend(iter)
+        self.0.extend(iter);
     }
 
     fn serialize(self) -> String {
-        todo!()
+        self.to_string()
     }
 }
 
@@ -83,18 +88,20 @@ impl Index<usize> for RnaSeq {
     }
 }
 
+impl IndexMut<usize> for RnaSeq {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
 impl Display for RnaSeq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut line = String::with_capacity(60);
-        self.0
-            .chunks(60)
-            .map(|chunk| {
-                line.extend(chunk.iter().map(|c| RNA_CODONS[*c as usize] as char));
-                let ret = writeln!(f, "{line}");
-                line.clear();
-                ret
-            })
-            .collect::<Result<Vec<()>, std::fmt::Error>>()?;
+        for chunk in self.0.chunks(60) {
+            line.extend(chunk.iter().map(char::from));
+            writeln!(f, "{line}")?;
+            line.clear();
+        }
         Ok(())
     }
 }

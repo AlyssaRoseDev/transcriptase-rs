@@ -26,7 +26,9 @@ pub enum Attribute {
 impl Attribute {
     pub(crate) fn parse(src: &str) -> TXResult<Either<Self, Id>> {
         let (tag, value) = src.split_once('=').ok_or_else(|| {
-            TXError::NomParsing(format!("Invalid attribute, expected tag=value, got {src}"))
+            TXError::InternalParseFailure(format!(
+                "Invalid attribute, expected tag=value, got {src}"
+            ))
         })?;
         Ok(if tag == "ID" {
             Either::Right(value.into())
