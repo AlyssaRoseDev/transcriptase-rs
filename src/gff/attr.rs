@@ -1,5 +1,5 @@
 use crate::{
-    err::{TXError, TXResult},
+    err::{TXaseError, TXaseResult},
     gff::{parsers::strand, Strand},
 };
 use either::Either;
@@ -24,9 +24,9 @@ pub enum Attribute {
 }
 
 impl Attribute {
-    pub(crate) fn parse(src: &str) -> TXResult<Either<Self, Id>> {
+    pub(crate) fn parse(src: &str) -> TXaseResult<Either<Self, Id>> {
         let (tag, value) = src.split_once('=').ok_or_else(|| {
-            TXError::InternalParseFailure(format!(
+            TXaseError::InvalidAttribute(format!(
                 "Invalid attribute, expected tag=value, got {src}"
             ))
         })?;
@@ -37,23 +37,23 @@ impl Attribute {
         })
     }
 
-    pub(crate) fn parse_kind(src: &str, value: &str) -> TXResult<Self> {
+    pub(crate) fn parse_kind(src: &str, value: &str) -> TXaseResult<Self> {
         Ok(match src {
         "Name" => Self::Name(src.into()),
         "Alias" => Self::Alias(src.into()),
         "Parent" => Self::Parent(value.split(',').map(Id::from).collect()),
         "Target" => {
             let mut parts = value.split(' ');
-            let target_id = parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?.into();
-            let start = parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
-            let end = parts.next().ok_or_else(|| TXError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
+            let target_id = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?.into();
+            let start = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
+            let end = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
             let strand = parts.next().map(|st| strand(st).map(|(_, strand)| strand)).transpose()?.flatten().map(Strand::parse).transpose()?;
             Self::Target { target_id, start, end, strand }
         },
-        "Gap" => Self::Gap(src.split(' ').map(|gap| -> TXResult<(GapKind, usize)> {
+        "Gap" => Self::Gap(src.split(' ').map(|gap| -> TXaseResult<(GapKind, usize)> {
             let (kind, len) = gap.split_at(0);
             Ok((GapKind::parse(kind)?, len.parse::<usize>()?))
-        }).collect::<TXResult<Vec<(GapKind, usize)>>>()?),
+        }).collect::<TXaseResult<Vec<(GapKind, usize)>>>()?),
         "Derives_from" => Self::DerivesFrom(value.into()),
         "Note" => Self::Note(value.into()),
         "Dbxref" => Self::DbxRef(value.into()),
@@ -61,9 +61,9 @@ impl Attribute {
         "Is_circular" => match value {
             "true" => Self::IsCircular(true),
             "false" => Self::IsCircular(false),
-            val => return Err(TXError::InvalidAttribute(format!("Invalid Is_circular attribute expected one of ['true', 'false'], got: {val}")))
+            val => return Err(TXaseError::InvalidAttribute(format!("Invalid Is_circular attribute expected one of ['true', 'false'], got: {val}")))
         },
-        tag if tag.chars().next().ok_or_else(|| TXError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
+        tag if tag.chars().next().ok_or_else(|| TXaseError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXaseError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
         tag => Self::Other(tag.into(), value.into()),
     })
     }
@@ -91,7 +91,7 @@ pub enum GapKind {
 }
 
 impl GapKind {
-    pub fn parse(src: &str) -> TXResult<Self> {
+    pub fn parse(src: &str) -> TXaseResult<Self> {
         Ok(match src {
             "M" => Self::Match,
             "I" => Self::Insert,
@@ -99,7 +99,7 @@ impl GapKind {
             "F" => Self::FwdFrameShift,
             "R" => Self::RevFrameShift,
             _ => {
-                return Err(TXError::InvalidAttribute(format!(
+                return Err(TXaseError::InvalidAttribute(format!(
                     "Invalid Gap Kind, expected one of ['M', 'I', 'D', 'F', 'R'], got: {src}"
                 )))
             }

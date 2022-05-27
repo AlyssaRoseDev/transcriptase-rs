@@ -1,8 +1,7 @@
 use super::{
-    nucleotide::DNA,
-    prelude::{DNA_CODONS, RNA},
+    prelude::{RNA, DNA},
 };
-use crate::{err::TXError, fasta::Sequence};
+use crate::{err::TXaseError, fasta::Sequence};
 use std::{
     fmt::Display,
     ops::{Index, IndexMut},
@@ -14,11 +13,11 @@ pub struct DnaSeq(Vec<DNA>);
 impl Sequence for DnaSeq {
     type Inner = DNA;
 
-    fn parse(src: &str) -> Result<Self, TXError> {
+    fn parse(src: &str) -> Result<Self, TXaseError> {
         Ok(Self(
             src.lines()
                 .flat_map(|line| line.chars().map(DNA::try_from))
-                .collect::<Result<Vec<DNA>, TXError>>()?,
+                .collect::<Result<Vec<DNA>, TXaseError>>()?,
         ))
     }
 
@@ -49,7 +48,7 @@ impl Display for DnaSeq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut line = String::with_capacity(60);
         for chunk in self.0.chunks(60) {
-            line.extend(chunk.iter().map(|c| DNA_CODONS[*c as usize] as char));
+            line.extend(chunk.iter().map(char::from));
             writeln!(f, "{line}")?;
             line.clear();
         }
@@ -63,11 +62,11 @@ pub struct RnaSeq(Vec<RNA>);
 impl Sequence for RnaSeq {
     type Inner = RNA;
 
-    fn parse(src: &str) -> Result<Self, TXError> {
+    fn parse(src: &str) -> Result<Self, TXaseError> {
         Ok(Self(
             src.lines()
                 .flat_map(|line| line.chars().map(RNA::try_from))
-                .collect::<Result<Vec<RNA>, TXError>>()?,
+                .collect::<Result<Vec<RNA>, TXaseError>>()?,
         ))
     }
 

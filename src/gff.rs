@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::err::{TXError, TXResult};
+use crate::err::{TXaseError, TXaseResult};
 use attr::{Attribute, Id};
 use either::Either;
 use nom::{bytes::complete::is_a, Parser};
@@ -17,8 +17,8 @@ pub struct GFF {
 }
 
 impl GFF {
-    pub fn parse(src: &impl AsRef<str>) -> TXResult<Self> {
-        fn inner(this: &str) -> TXResult<GFF> {
+    pub fn parse(src: &impl AsRef<str>) -> TXaseResult<Self> {
+        fn inner(this: &str) -> TXaseResult<GFF> {
             let mut meta = Vec::new();
             let mut entries = Vec::new();
             for line in this.lines() {
@@ -54,7 +54,7 @@ pub enum Metadata {
 }
 
 impl Metadata {
-    pub(crate) fn parse(src: &str) -> TXResult<Option<Self>> {
+    pub(crate) fn parse(src: &str) -> TXaseResult<Option<Self>> {
         let (tag, meta) = is_a("#").parse(src)?;
         Ok(match tag {
             "##" => Some(Self::Pragma(UnescapedString::new(meta)?)),
@@ -80,7 +80,7 @@ pub struct Entry {
 impl Entry {
     // GFF Entry line:
     // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
-    pub(crate) fn parse(src: &str) -> TXResult<Self> {
+    pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
         let (_, raw) = parsers::entry(src)?;
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
             raw;
@@ -93,7 +93,7 @@ impl Entry {
                     if id.is_none() {
                         id = Some(id_attr);
                     } else {
-                        return Err(TXError::DuplicateGFFEntryID());
+                        return Err(TXaseError::DuplicateGFFEntryID());
                     }
                 }
             }
@@ -113,7 +113,7 @@ impl Entry {
 }
 
 impl FromStr for Entry {
-    type Err = TXError;
+    type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Entry::parse(s)
@@ -128,13 +128,13 @@ pub enum Strand {
 }
 
 impl Strand {
-    pub fn parse(src: char) -> TXResult<Self> {
+    pub fn parse(src: char) -> TXaseResult<Self> {
         Ok(match src {
             '+' => Self::Positive,
             '-' => Self::Negative,
             '?' => Self::Unknown,
             _ => {
-                return Err(TXError::InternalParseFailure(format!(
+                return Err(TXaseError::InternalParseFailure(format!(
                     "Unexpected Strand kind, expected one of: ['+', '-', '?'], got {src}"
                 )))
             }
@@ -146,7 +146,7 @@ impl Strand {
 pub struct UnescapedString(Box<str>);
 
 impl UnescapedString {
-    pub fn new(src: &str) -> TXResult<Self> {
+    pub fn new(src: &str) -> TXaseResult<Self> {
         if src.contains('%') {
             let mut escaped = src.to_owned();
             while let Some(at) = escaped.find('%') {

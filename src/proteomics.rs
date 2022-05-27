@@ -1,11 +1,12 @@
 use std::{ops::{Index, IndexMut}, fmt::Display};
 
-use crate::{err::TXError, fasta::Sequence};
+use crate::{err::TXaseError, fasta::Sequence};
 
 use self::amino::AminoAcid;
 
 mod amino;
 
+#[derive(Debug, Clone)]
 pub struct Proteome(Vec<AminoAcid>);
 
 impl Index<usize> for Proteome {
@@ -25,11 +26,11 @@ impl IndexMut<usize> for Proteome {
 impl Sequence for Proteome {
     type Inner = AminoAcid;
 
-    fn parse(src: &str) -> Result<Self, TXError> {
+    fn parse(src: &str) -> Result<Self, TXaseError> {
         Ok(Self(
             src.lines()
                 .flat_map(|line| line.chars().map(AminoAcid::try_from))
-                .collect::<Result<Vec<AminoAcid>, TXError>>()?,
+                .collect::<Result<Vec<AminoAcid>, TXaseError>>()?,
         ))
     }
 

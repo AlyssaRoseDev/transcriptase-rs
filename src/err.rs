@@ -1,32 +1,43 @@
-use std::str::Utf8Error;
-
 use thiserror::Error;
 
-pub type TXResult<T, E = TXError> = Result<T, E>;
+/// Type alias for a Result with the [`TXaseError`] as it's default error type
+pub type TXaseResult<T, E = TXaseError> = Result<T, E>;
+
+/// Collection of the errors that can be returned from the public API
 #[derive(Debug, Error)]
-pub enum TXError {
+pub enum TXaseError {
+    /// An invalid nucleotide was found while converting text to a
+    /// [`DNA`](crate::genomics::genome::DNA) or [`RNA`](crate::genomics::genome::RNA)
     #[error("Invalid nucleotide: {0:?}")]
     InvalidNucleotide(String),
+    /// An invalid codon was found while translating from a
+    /// [`DNA`](crate::genomics::genome::DNA) or [`RNA`](crate::genomics::genome::RNA)
+    /// to an [`AminoAcid`](crate::proteomics::AminoAcid)
     #[error("Invalid amino acid: {0:?}")]
     InvalidCodon(String),
+    /// An [`IoError`](std::io::Error)
     #[error("IO Error: {0:?}")]
-    BadFile(#[from] std::io::Error),
-    #[error("Numeric conversion failed: {0:?}")]
-    TryFromInt(#[from] std::num::TryFromIntError),
+    StdIo(#[from] std::io::Error),
+    /// A [`FmtError`](std::fmt::Error)
     #[error("Formatting error: {0:?}")]
-    Formatting(#[from] std::fmt::Error),
+    StdFmt(#[from] std::fmt::Error),
+    /// An error that occurs during Nom text parsing
     #[error("Nom Error: {0}")]
     NomParsing(String),
+    /// A [`ParseIntError`](std::num::ParseIntError)
     #[error("ParseInt Error: {0}")]
     StdIntParse(#[from] std::num::ParseIntError),
+    /// An invalid [`Attribute`](crate::gff::attr::Attribute) kind,
+    /// as attributes that start with uppercase letters are reserved
     #[error("Invalid Attribute: {0}")]
     InvalidAttribute(String),
-    #[error("Unexpected end of input")]
-    UnexpectedEndOfInput(),
+    /// A duplicate [`Id`](crate::gff::attr::Id) was found while parsing an entry
     #[error("Encountered Duplicate Id Attribute in GFF Entry")]
     DuplicateGFFEntryID(),
+    /// A [`Utf8Error`](std::str::Utf8Error)
     #[error("{0}")]
-    InvalidUTF8(#[from] Utf8Error),
+    StdUTF8(#[from] std::str::Utf8Error),
+    /// A parsing error that occured in the library itself
     #[error("{0}")]
     InternalParseFailure(String),
 }
@@ -40,7 +51,7 @@ type NomTreeErr<'a> = nom::Err<
     >,
 >;
 
-impl From<NomTreeErr<'_>> for TXError {
+impl From<NomTreeErr<'_>> for TXaseError {
     fn from(src: NomTreeErr) -> Self {
         Self::NomParsing(src.to_string())
     }

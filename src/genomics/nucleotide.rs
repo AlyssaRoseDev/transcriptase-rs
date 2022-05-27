@@ -1,4 +1,4 @@
-use crate::err::TXError;
+use crate::err::TXaseError;
 use std::fmt::Display;
 use std::{result::Result, str::FromStr};
 /*
@@ -49,7 +49,7 @@ impl Default for DNA {
 }
 
 impl FromStr for DNA {
-    type Err = TXError;
+    type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &*s.to_uppercase() {
@@ -69,15 +69,15 @@ impl FromStr for DNA {
             "D" => Ok(DNA::NOTC),
             "B" => Ok(DNA::NOTA),
             "N" => Ok(DNA::ANY),
-            _ => Err(TXError::InvalidNucleotide(String::from(s))),
+            _ => Err(TXaseError::InvalidNucleotide(String::from(s))),
         }
     }
 }
 
 impl TryFrom<char> for DNA {
-    type Error = TXError;
+    type Error = TXaseError;
 
-    fn try_from(value: char) -> Result<Self, TXError> {
+    fn try_from(value: char) -> Result<Self, TXaseError> {
         Ok(match value {
             '0' => Self::ZERO,
             'A' => Self::ADENINE,
@@ -95,15 +95,15 @@ impl TryFrom<char> for DNA {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => return Err(TXError::InvalidNucleotide(String::from(value))),
+            _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
         })
     }
 }
 
 impl TryFrom<u8> for DNA {
-    type Error = TXError;
+    type Error = TXaseError;
 
-    fn try_from(value: u8) -> Result<Self, TXError> {
+    fn try_from(value: u8) -> Result<Self, TXaseError> {
         Ok(match value {
             0x0 => Self::ZERO,
             0x1 => Self::ADENINE,
@@ -121,7 +121,7 @@ impl TryFrom<u8> for DNA {
             0xD => Self::NOTC,
             0xE => Self::NOTA,
             0xF => Self::ANY,
-            _ => return Err(TXError::InvalidNucleotide(format!("{value}"))),
+            _ => return Err(TXaseError::InvalidNucleotide(format!("{value}"))),
         })
     }
 }
@@ -188,7 +188,7 @@ impl Default for RNA {
 }
 
 impl FromStr for RNA {
-    type Err = TXError;
+    type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match &*s.to_uppercase() {
@@ -208,13 +208,13 @@ impl FromStr for RNA {
             "D" => Ok(RNA::NOTC),
             "B" => Ok(RNA::NOTA),
             "N" => Ok(RNA::ANY),
-            _ => Err(TXError::InvalidNucleotide(String::from(s))),
+            _ => Err(TXaseError::InvalidNucleotide(String::from(s))),
         }
     }
 }
 
 impl TryFrom<char> for RNA {
-    type Error = TXError;
+    type Error = TXaseError;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -234,15 +234,15 @@ impl TryFrom<char> for RNA {
             'D' => Self::NOTC,
             'B' => Self::NOTA,
             'N' => Self::ANY,
-            _ => return Err(TXError::InvalidNucleotide(String::from(value))),
+            _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
         })
     }
 }
 
 impl TryFrom<u8> for RNA {
-    type Error = TXError;
+    type Error = TXaseError;
 
-    fn try_from(value: u8) -> Result<Self, TXError> {
+    fn try_from(value: u8) -> Result<Self, TXaseError> {
         Ok(match value {
             0x0 => Self::ZERO,
             0x1 => Self::ADENINE,
@@ -260,7 +260,7 @@ impl TryFrom<u8> for RNA {
             0xD => Self::NOTC,
             0xE => Self::NOTA,
             0xF => Self::ANY,
-            _ => return Err(TXError::InvalidNucleotide(format!("{value}"))),
+            _ => return Err(TXaseError::InvalidNucleotide(format!("{value}"))),
         })
     }
 }

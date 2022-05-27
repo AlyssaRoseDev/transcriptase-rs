@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::err::{TXError, TXResult};
+use crate::err::{TXaseError, TXaseResult};
 
 use self::translation::{DNA_TRANSLATION_TABLE, RNA_TRANSLATION_TABLE};
 mod translation;
@@ -62,7 +62,7 @@ impl AminoAcid {
         "Proline",
         "Serine",
         "Threonine",
-        "Tryptonphan",
+        "Tryptophan",
         "Tyrosine",
         "Valine",
         "Selenocysteine",
@@ -85,23 +85,23 @@ impl AminoAcid {
         Self::LONG[self as usize]
     }
 
-    pub fn translate_rna(codon: &str) -> TXResult<Self> {
+    pub fn translate_rna(codon: &str) -> TXaseResult<Self> {
         RNA_TRANSLATION_TABLE
             .get(codon)
             .copied()
-            .ok_or_else(|| TXError::InvalidCodon(codon.to_string()))
+            .ok_or_else(|| TXaseError::InvalidCodon(codon.to_string()))
     }
 
-    pub fn translate_dna(codon: &str) -> TXResult<Self> {
+    pub fn translate_dna(codon: &str) -> TXaseResult<Self> {
         DNA_TRANSLATION_TABLE
             .get(codon)
             .copied()
-            .ok_or_else(|| TXError::InvalidCodon(codon.to_string()))
+            .ok_or_else(|| TXaseError::InvalidCodon(codon.to_string()))
     }
 }
 
 impl FromStr for AminoAcid {
-    type Err = TXError;
+    type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -122,14 +122,14 @@ impl FromStr for AminoAcid {
             "Proline" | "Pro" | "P" => Self::Proline,
             "Serine" | "Ser" | "S" => Self::Serine,
             "Threonine" | "Thr" | "T" => Self::Threonine,
-            "Tryptonphan" | "Trp" | "W" => Self::Tryptonphan,
+            "Tryptophan" | "Trp" | "W" => Self::Tryptonphan,
             "Tyrosine" | "Tyr" | "Y" => Self::Tyrosine,
             "Valine" | "Val" | "V" => Self::Valine,
             "Selenocysteine" | "Sec" | "U" => Self::Selenocysteine,
             "Pyrrolysine" | "Pyl" | "O" => Self::Pyrrolysine,
             "Amber" | "Ochre" | "Umber" | "Opal" | "Ter" | "*" => Self::Stop,
             _ => {
-                return Err(TXError::InternalParseFailure(format!(
+                return Err(TXaseError::InternalParseFailure(format!(
                     "Failed to parse {s} as an Amino Acid"
                 )))
             }
@@ -138,7 +138,7 @@ impl FromStr for AminoAcid {
 }
 
 impl TryFrom<char> for AminoAcid {
-    type Error = TXError;
+    type Error = TXaseError;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -166,7 +166,7 @@ impl TryFrom<char> for AminoAcid {
             'O' => Self::Pyrrolysine,
             '*' => Self::Stop,
             val => {
-                return Err(TXError::InternalParseFailure(format!(
+                return Err(TXaseError::InternalParseFailure(format!(
                     "Failed to parse {val} as an Amino Acid"
                 )))
             }
