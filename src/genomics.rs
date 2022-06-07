@@ -1,6 +1,9 @@
-pub mod nucleotide;
 pub mod genome;
+pub mod nucleotide;
 
 pub(crate) mod prelude {
-    pub use crate::genomics::{nucleotide::{RNA, DNA}, genome::{DnaSeq, RnaSeq}};
+    pub use crate::genomics::{
+        genome::{DnaSeq, RnaSeq},
+        nucleotide::{DNA, RNA},
+    };
 }

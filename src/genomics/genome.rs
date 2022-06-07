@@ -1,6 +1,4 @@
-use super::{
-    prelude::{RNA, DNA},
-};
+use super::prelude::{DNA, RNA};
 use crate::{err::TXaseError, fasta::Sequence};
 use std::{
     fmt::Display,

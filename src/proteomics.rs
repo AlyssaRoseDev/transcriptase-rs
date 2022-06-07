@@ -1,4 +1,7 @@
-use std::{ops::{Index, IndexMut}, fmt::Display};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+};
 
 use crate::{err::TXaseError, fasta::Sequence};
 
