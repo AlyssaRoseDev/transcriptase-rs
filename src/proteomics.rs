@@ -1,7 +1,10 @@
 use std::{
     fmt::Display,
     ops::{Index, IndexMut},
+    str::FromStr,
 };
+
+use rayon::prelude::*;
 
 use crate::{err::TXaseError, fasta::Sequence};
 
@@ -29,20 +32,44 @@ impl IndexMut<usize> for Proteome {
 impl Sequence for Proteome {
     type Inner = AminoAcid;
 
-    fn parse(src: &str) -> Result<Self, TXaseError> {
+    fn serialize(&self) -> String {
+        todo!()
+    }
+
+    fn serialize_bytes(&self) -> &[u8] {
+        todo!()
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl FromStr for Proteome {
+    type Err = TXaseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(
-            src.lines()
-                .flat_map(|line| line.chars().map(AminoAcid::try_from))
-                .collect::<Result<Vec<AminoAcid>, TXaseError>>()?,
+            s.par_lines()
+                .flat_map(|line| line.par_chars().map(AminoAcid::try_from))
+                .collect::<Result<_, _>>()?,
         ))
     }
+}
 
-    fn extend<I: IntoIterator<Item = Self::Inner>>(&mut self, iter: I) {
-        self.0.extend(iter);
+#[cfg(not(feature = "rayon"))]
+impl FromStr for Proteome {
+    type Err = TXaseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(
+            s.lines()
+                .flat_map(|line| line.chars().map(AminoAcid::try_from))
+                .collect::<Result<_, _>>()?,
+        ))
     }
+}
 
-    fn serialize(self) -> String {
-        todo!()
+impl Extend<AminoAcid> for Proteome {
+    fn extend<T: IntoIterator<Item = AminoAcid>>(&mut self, iter: T) {
+        self.0.extend(iter)
     }
 }
 

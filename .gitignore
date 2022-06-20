@@ -1,5 +1,8 @@
 /target
 Cargo.lock
+*.fastq
 *.fasta
 *.fna
 *.gff
+perf.*
+*.svg
