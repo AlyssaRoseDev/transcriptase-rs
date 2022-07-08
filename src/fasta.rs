@@ -14,8 +14,10 @@ use std::{ops::Index, str::FromStr};
 /// description and a sequence of [`RNA`](crate::genomics::nucleotide::RNA), [`DNA`](crate::genomics::nucleotide::DNA), or [`Amino Acids`](crate::proteomics::amino::AminoAcid).
 #[derive(Debug, Clone)]
 pub struct Fasta<T: Sequence> {
-    description: Option<Box<str>>,
-    sequence: T,
+    /// The description given in the inital comment line
+    pub description: Option<Box<str>>,
+    /// The genomic or proteomic sequence
+    pub sequence: T,
 }
 
 impl<T: Sequence> Fasta<T> {
@@ -50,6 +52,12 @@ impl<T: Sequence> Fasta<T> {
     }
 }
 impl<T: Sequence + Send> Fasta<T> {
+    /// Parses a string slice as a [`Fasta`] formatted document.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the [`Sequence`]
+    /// parse implementation returns an error
     #[cfg(feature = "rayon")]
     pub fn parse(src: &str) -> TXaseResult<Either<Self, Vec<Self>>> {
         let mut seqs: Vec<Fasta<T>> = crate::util::Split2Iter::new(b'>', b';', src)
@@ -80,13 +88,20 @@ pub(crate) fn comment(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
     delimited(one_of(">;"), take_until("\n"), newline).parse(src)
 }
 
+/// A sequence that can be:
+/// - Parsed from a text format
+/// - Serialized to a text format
+/// - Serialized to a raw binary representation
 pub trait Sequence
 where
     Self: Index<usize> + Extend<Self::Inner> + FromStr<Err = TXaseError> + Sized,
 {
+    /// The type of each member of the sequence
     type Inner: TryFrom<char>;
 
+    /// Serialize this `Sequence` to a text format
     fn serialize(&self) -> String;
 
+    /// Serialize this `Sequence` to a raw binary stream
     fn serialize_bytes(&self) -> &[u8];
 }

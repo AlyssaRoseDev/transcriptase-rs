@@ -1,4 +1,4 @@
-#![warn(missing_debug_implementations)]
+//#![warn(missing_debug_implementations, missing_docs)]
 #![allow(clippy::missing_errors_doc)]
 
 pub mod err;

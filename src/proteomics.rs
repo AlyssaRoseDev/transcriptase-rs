@@ -10,7 +10,7 @@ use crate::{err::TXaseError, fasta::Sequence};
 
 use self::amino::AminoAcid;
 
-mod amino;
+pub mod amino;
 
 #[derive(Debug, Clone)]
 pub struct Proteome(Vec<AminoAcid>);

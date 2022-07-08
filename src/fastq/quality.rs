@@ -1,6 +1,9 @@
 use crate::err::TXaseError;
 
+/// Defines the requirements for an ASCII character encoded quality score for FastQ files
 pub trait Quality: From<f64> + Into<f64> + TryFrom<char> + Into<char> {}
+
+/// A Phred quality score, encoded by the formula `-10 * log10(P)` for a probability `P`
 #[derive(Debug)]
 pub struct Phred(u8);
 
@@ -26,19 +29,20 @@ impl TryFrom<char> for Phred {
                 r#"Phred quality character must be between '!' (0x21) and '~' (0x7e), got {value} ({byte:x})"#
             )))
         } else {
-            Ok(Self(byte))
+            Ok(Self(byte - 0x21))
         }
     }
 }
 
 impl From<Phred> for char {
     fn from(score: Phred) -> Self {
-        score.0 as char
+        (score.0 + 0x21) as char
     }
 }
 
 impl Quality for Phred {}
 
+/// A Quality score from pre-1.3 versions of the Solexa pipeline, encoded by the formula `-10 * log10(p / 1-p)`
 #[derive(Debug)]
 pub struct Solexa(u8);
 

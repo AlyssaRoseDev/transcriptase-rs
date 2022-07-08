@@ -1,7 +1,6 @@
 use nom::{
     bytes::complete::{is_a, tag, take_until1},
     character::complete::{char, one_of},
-    multi::separated_list0,
     number::complete::double,
     sequence::{terminated, tuple},
     IResult, Parser,

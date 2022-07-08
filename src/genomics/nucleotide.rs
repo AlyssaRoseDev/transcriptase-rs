@@ -1,39 +1,57 @@
 use crate::err::TXaseError;
 use std::fmt::Display;
 use std::{result::Result, str::FromStr};
+
 /*
 These hex representations allow for the representation of IUPAC extended Codons to match to the parallel
 bitwise operations on the Nucleobases, e.g. Amino(M) to be represented as the bitwise OR of Adenine and
 Cytosine. The special case is the NotX representations, which are the bitwise not of the nucleobase
-followed by the bitwise AND of 0b11110000 to ensure the representation conforms to 4 bits per Codon.
-This would be reversed (aka bitwise NOT of the mask) to read the Codon at the high end of each byte.
-Codon, this is 2 per byte, or 0.5 KB per Kbp. This makes the Human Genome (approx. 6.2 Gbp) 3.1 GB
+followed by the bitwise AND of 0xF to ensure the representation conforms to 4 bits per Codon.
 */
+
 ///CODONS stores the ASCII encoding of the representative characters for each supported nucleobase
-pub const DNA_CODONS: [u8; 16] = [
-    b'0', b'A', b'C', b'M', b'G', b'R', b'S', b'V', b'T', b'W', b'Y', b'H', b'K', b'D', b'B', b'N',
+pub(crate) const DNA_CODONS: [char; 16] = [
+    '0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N',
 ];
-pub const MASK: u8 = 0x0F;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+
+/// The 16 degenerate base symbols that can occur in DNA as defined by the ["Nomencalture for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum DNA {
-    ZERO = 0x0,
-    ADENINE = 0x1,
-    CYTOSINE = 0x2,
-    AMINO = 0x3,
-    GUANINE = 0x4,
-    PURINE = 0x5,
-    STRONG = 0x6,
-    NOTU = 0x7,
-    THYMINE = 0x8,
-    WEAK = 0x9,
-    PYRIMIDINE = 0xA,
-    NOTG = 0xB,
-    KETO = 0xC,
-    NOTC = 0xD,
-    NOTA = 0xE,
-    ANY = 0xF,
+    /// A gap in the sequence
+    Gap = 0x0,
+    /// An Adenine nucleotide
+    Adenine = 0x1,
+    /// A Cytosine nucleotide
+    Cytosine = 0x2,
+    /// Either Adenine or Cytosine
+    Amino = 0x3,
+    /// A Guanine nucleotide
+    Guanine = 0x4,
+    /// Either Adenine or Guanine
+    Purine = 0x5,
+    /// Either Cytosine or Guanine
+    Strong = 0x6,
+    /// Any one of Adenine, Cytosine, or Guanine
+    NotT = 0x7,
+    /// A Thymine nucleotide
+    Thymine = 0x8,
+    /// Either Adenine or Thymine
+    Weak = 0x9,
+    /// Either Cytosine or Thymine
+    Pyrimidine = 0xA,
+    /// Any one of Adenine, Cytosine, or Thymine
+    NotG = 0xB,
+    /// Either Guanine or Thymine
+    Ketone = 0xC,
+    /// Any one of Adenine, Guanine, or Thymine
+    NotC = 0xD,
+    /// Any one of Cytosine, Guanine, or Thymine
+    NotA = 0xE,
+    /// Any DNA nucleotide
+    #[default]
+    Any = 0xF,
 }
 
 impl Display for DNA {
@@ -42,33 +60,27 @@ impl Display for DNA {
     }
 }
 
-impl Default for DNA {
-    fn default() -> Self {
-        Self::ANY
-    }
-}
-
 impl FromStr for DNA {
     type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &*s.to_uppercase() {
-            "0" => Ok(DNA::ZERO),
-            "A" => Ok(DNA::ADENINE),
-            "C" => Ok(DNA::CYTOSINE),
-            "M" => Ok(DNA::AMINO),
-            "G" => Ok(DNA::GUANINE),
-            "R" => Ok(DNA::PURINE),
-            "S" => Ok(DNA::STRONG),
-            "V" => Ok(DNA::NOTU),
-            "T" => Ok(DNA::THYMINE),
-            "W" => Ok(DNA::WEAK),
-            "Y" => Ok(DNA::PYRIMIDINE),
-            "H" => Ok(DNA::NOTG),
-            "K" => Ok(DNA::KETO),
-            "D" => Ok(DNA::NOTC),
-            "B" => Ok(DNA::NOTA),
-            "N" => Ok(DNA::ANY),
+        match s {
+            "0" => Ok(DNA::Gap),
+            "A" => Ok(DNA::Adenine),
+            "C" => Ok(DNA::Cytosine),
+            "M" => Ok(DNA::Amino),
+            "G" => Ok(DNA::Guanine),
+            "R" => Ok(DNA::Purine),
+            "S" => Ok(DNA::Strong),
+            "V" => Ok(DNA::NotT),
+            "T" => Ok(DNA::Thymine),
+            "W" => Ok(DNA::Weak),
+            "Y" => Ok(DNA::Pyrimidine),
+            "H" => Ok(DNA::NotG),
+            "K" => Ok(DNA::Ketone),
+            "D" => Ok(DNA::NotC),
+            "B" => Ok(DNA::NotA),
+            "N" => Ok(DNA::Any),
             _ => Err(TXaseError::InvalidNucleotide(String::from(s))),
         }
     }
@@ -79,22 +91,22 @@ impl TryFrom<char> for DNA {
 
     fn try_from(value: char) -> Result<Self, TXaseError> {
         Ok(match value {
-            '0' => Self::ZERO,
-            'A' => Self::ADENINE,
-            'C' => Self::CYTOSINE,
-            'M' => Self::AMINO,
-            'G' => Self::GUANINE,
-            'R' => Self::PURINE,
-            'S' => Self::STRONG,
-            'V' => Self::NOTU,
-            'T' => Self::THYMINE,
-            'W' => Self::WEAK,
-            'Y' => Self::PYRIMIDINE,
-            'H' => Self::NOTG,
-            'K' => Self::KETO,
-            'D' => Self::NOTC,
-            'B' => Self::NOTA,
-            'N' => Self::ANY,
+            '0' => Self::Gap,
+            'A' => Self::Adenine,
+            'C' => Self::Cytosine,
+            'M' => Self::Amino,
+            'G' => Self::Guanine,
+            'R' => Self::Purine,
+            'S' => Self::Strong,
+            'V' => Self::NotT,
+            'T' => Self::Thymine,
+            'W' => Self::Weak,
+            'Y' => Self::Pyrimidine,
+            'H' => Self::NotG,
+            'K' => Self::Ketone,
+            'D' => Self::NotC,
+            'B' => Self::NotA,
+            'N' => Self::Any,
             _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
         })
     }
@@ -105,22 +117,22 @@ impl TryFrom<u8> for DNA {
 
     fn try_from(value: u8) -> Result<Self, TXaseError> {
         Ok(match value {
-            0x0 => Self::ZERO,
-            0x1 => Self::ADENINE,
-            0x2 => Self::CYTOSINE,
-            0x3 => Self::AMINO,
-            0x4 => Self::GUANINE,
-            0x5 => Self::PURINE,
-            0x6 => Self::STRONG,
-            0x7 => Self::NOTU,
-            0x8 => Self::THYMINE,
-            0x9 => Self::WEAK,
-            0xA => Self::PYRIMIDINE,
-            0xB => Self::NOTG,
-            0xC => Self::KETO,
-            0xD => Self::NOTC,
-            0xE => Self::NOTA,
-            0xF => Self::ANY,
+            0x0 => Self::Gap,
+            0x1 => Self::Adenine,
+            0x2 => Self::Cytosine,
+            0x3 => Self::Amino,
+            0x4 => Self::Guanine,
+            0x5 => Self::Purine,
+            0x6 => Self::Strong,
+            0x7 => Self::NotT,
+            0x8 => Self::Thymine,
+            0x9 => Self::Weak,
+            0xA => Self::Pyrimidine,
+            0xB => Self::NotG,
+            0xC => Self::Ketone,
+            0xD => Self::NotC,
+            0xE => Self::NotA,
+            0xF => Self::Any,
             _ => return Err(TXaseError::InvalidNucleotide(format!("{value}"))),
         })
     }
@@ -128,51 +140,63 @@ impl TryFrom<u8> for DNA {
 
 impl From<DNA> for char {
     fn from(dna: DNA) -> Self {
-        DNA_CODONS[dna as usize] as char
+        DNA_CODONS[dna as usize]
     }
 }
 
 impl From<&DNA> for char {
     fn from(dna: &DNA) -> Self {
-        DNA_CODONS[*dna as usize] as char
+        DNA_CODONS[*dna as usize]
     }
 }
 
 impl From<&mut DNA> for char {
     fn from(dna: &mut DNA) -> Self {
-        DNA_CODONS[*dna as usize] as char
+        DNA_CODONS[*dna as usize]
     }
 }
 
-impl From<DNA> for u8 {
-    fn from(codon: DNA) -> Self {
-        codon as u8
-    }
-}
-
-pub const RNA_CODONS: [u8; 16] = [
-    b'0', b'A', b'C', b'M', b'G', b'R', b'S', b'V', b'U', b'W', b'Y', b'H', b'K', b'D', b'B', b'N',
+pub(crate) const RNA_CODONS: [char; 16] = [
+    '0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'U', 'W', 'Y', 'H', 'K', 'D', 'B', 'N',
 ];
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+
+/// The 16 degenerate base symbols that can occur in RNA as defined by the ["Nomencalture for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum RNA {
-    ZERO = 0x0,
-    ADENINE = 0x1,
-    CYTOSINE = 0x2,
-    AMINO = 0x3,
-    GUANINE = 0x4,
-    PURINE = 0x5,
-    STRONG = 0x6,
-    NOTU = 0x7,
-    URACIL = 0x8,
-    WEAK = 0x9,
-    PYRIMIDINE = 0xA,
-    NOTG = 0xB,
-    KETO = 0xC,
-    NOTC = 0xD,
-    NOTA = 0xE,
-    ANY = 0xF,
+    /// A gap in the sequence
+    Zero = 0x0,
+    /// An Adenine nucleotide
+    Adenine = 0x1,
+    /// A Cytosine nucleotide
+    Cytosine = 0x2,
+    /// Either Adenine or Cytosine
+    Amino = 0x3,
+    /// A Guanine nucleotide
+    Guanine = 0x4,
+    /// Either Adenine or Guanine
+    Purine = 0x5,
+    /// Either Cytosine or Guanine
+    Strong = 0x6,
+    /// Any one of Adenine, Cytosine, or Guanine
+    NotU = 0x7,
+    /// A Thymine nucleotide
+    Uracil = 0x8,
+    /// Either Adenine or Thymine
+    Weak = 0x9,
+    /// Either Cytosine or Thymine
+    Pyrimidine = 0xA,
+    /// Any one of Adenine, Cytosine, or Thymine
+    NotG = 0xB,
+    /// Either Guanine or Thymine
+    Ketone = 0xC,
+    /// Any one of Adenine, Guanine, or Thymine
+    NotC = 0xD,
+    /// Any one of Cytosine, Guanine, or Thymine
+    NotA = 0xE,
+    /// Any DNA nucleotide
+    #[default]
+    Any = 0xF,
 }
 
 impl Display for RNA {
@@ -181,33 +205,27 @@ impl Display for RNA {
     }
 }
 
-impl Default for RNA {
-    fn default() -> Self {
-        Self::ANY
-    }
-}
-
 impl FromStr for RNA {
     type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match &*s.to_uppercase() {
-            "0" => Ok(RNA::ZERO),
-            "A" => Ok(RNA::ADENINE),
-            "C" => Ok(RNA::CYTOSINE),
-            "M" => Ok(RNA::AMINO),
-            "G" => Ok(RNA::GUANINE),
-            "R" => Ok(RNA::PURINE),
-            "S" => Ok(RNA::STRONG),
-            "V" => Ok(RNA::NOTU),
-            "U" => Ok(RNA::URACIL),
-            "W" => Ok(RNA::WEAK),
-            "Y" => Ok(RNA::PYRIMIDINE),
-            "H" => Ok(RNA::NOTG),
-            "K" => Ok(RNA::KETO),
-            "D" => Ok(RNA::NOTC),
-            "B" => Ok(RNA::NOTA),
-            "N" => Ok(RNA::ANY),
+        match s {
+            "0" => Ok(RNA::Zero),
+            "A" => Ok(RNA::Adenine),
+            "C" => Ok(RNA::Cytosine),
+            "M" => Ok(RNA::Amino),
+            "G" => Ok(RNA::Guanine),
+            "R" => Ok(RNA::Purine),
+            "S" => Ok(RNA::Strong),
+            "V" => Ok(RNA::NotU),
+            "U" => Ok(RNA::Uracil),
+            "W" => Ok(RNA::Weak),
+            "Y" => Ok(RNA::Pyrimidine),
+            "H" => Ok(RNA::NotG),
+            "K" => Ok(RNA::Ketone),
+            "D" => Ok(RNA::NotC),
+            "B" => Ok(RNA::NotA),
+            "N" => Ok(RNA::Any),
             _ => Err(TXaseError::InvalidNucleotide(String::from(s))),
         }
     }
@@ -218,22 +236,22 @@ impl TryFrom<char> for RNA {
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(match value {
-            '0' => Self::ZERO,
-            'A' => Self::ADENINE,
-            'C' => Self::CYTOSINE,
-            'M' => Self::AMINO,
-            'G' => Self::GUANINE,
-            'R' => Self::PURINE,
-            'S' => Self::STRONG,
-            'V' => Self::NOTU,
-            'U' => Self::URACIL,
-            'W' => Self::WEAK,
-            'Y' => Self::PYRIMIDINE,
-            'H' => Self::NOTG,
-            'K' => Self::KETO,
-            'D' => Self::NOTC,
-            'B' => Self::NOTA,
-            'N' => Self::ANY,
+            '0' => Self::Zero,
+            'A' => Self::Adenine,
+            'C' => Self::Cytosine,
+            'M' => Self::Amino,
+            'G' => Self::Guanine,
+            'R' => Self::Purine,
+            'S' => Self::Strong,
+            'V' => Self::NotU,
+            'U' => Self::Uracil,
+            'W' => Self::Weak,
+            'Y' => Self::Pyrimidine,
+            'H' => Self::NotG,
+            'K' => Self::Ketone,
+            'D' => Self::NotC,
+            'B' => Self::NotA,
+            'N' => Self::Any,
             _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
         })
     }
@@ -244,22 +262,22 @@ impl TryFrom<u8> for RNA {
 
     fn try_from(value: u8) -> Result<Self, TXaseError> {
         Ok(match value {
-            0x0 => Self::ZERO,
-            0x1 => Self::ADENINE,
-            0x2 => Self::CYTOSINE,
-            0x3 => Self::AMINO,
-            0x4 => Self::GUANINE,
-            0x5 => Self::PURINE,
-            0x6 => Self::STRONG,
-            0x7 => Self::NOTU,
-            0x8 => Self::URACIL,
-            0x9 => Self::WEAK,
-            0xA => Self::PYRIMIDINE,
-            0xB => Self::NOTG,
-            0xC => Self::KETO,
-            0xD => Self::NOTC,
-            0xE => Self::NOTA,
-            0xF => Self::ANY,
+            0x0 => Self::Zero,
+            0x1 => Self::Adenine,
+            0x2 => Self::Cytosine,
+            0x3 => Self::Amino,
+            0x4 => Self::Guanine,
+            0x5 => Self::Purine,
+            0x6 => Self::Strong,
+            0x7 => Self::NotU,
+            0x8 => Self::Uracil,
+            0x9 => Self::Weak,
+            0xA => Self::Pyrimidine,
+            0xB => Self::NotG,
+            0xC => Self::Ketone,
+            0xD => Self::NotC,
+            0xE => Self::NotA,
+            0xF => Self::Any,
             _ => return Err(TXaseError::InvalidNucleotide(format!("{value}"))),
         })
     }
@@ -280,11 +298,5 @@ impl From<&RNA> for char {
 impl From<&mut RNA> for char {
     fn from(rna: &mut RNA) -> Self {
         RNA_CODONS[*rna as usize] as char
-    }
-}
-
-impl From<RNA> for u8 {
-    fn from(rna: RNA) -> Self {
-        rna as u8
     }
 }

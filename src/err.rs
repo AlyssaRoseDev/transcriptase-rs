@@ -7,13 +7,13 @@ pub type TXaseResult<T, E = TXaseError> = Result<T, E>;
 #[derive(Debug, Error)]
 pub enum TXaseError {
     /// An invalid nucleotide was found while converting text to a
-    /// [`DNA`](crate::genomics::genome::DNA) or [`RNA`](crate::genomics::genome::RNA)
+    /// [`DNA`](crate::genomics::nucleotide::DNA) or [`RNA`](crate::genomics::nucleotide::RNA)
     #[error("Invalid nucleotide: {0:?}")]
     InvalidNucleotide(String),
     /// An invalid codon was found while translating from a
-    /// [`DNA`](crate::genomics::genome::DNA) or [`RNA`](crate::genomics::genome::RNA)
-    /// to an [`AminoAcid`](crate::proteomics::AminoAcid)
-    #[error("Invalid amino acid: {0:?}")]
+    /// [`DNA`](crate::genomics::nucleotide::DNA) or [`RNA`](crate::genomics::nucleotide::RNA)
+    /// to an [`AminoAcid`](crate::proteomics::amino::AminoAcid)
+    #[error("Invalid amino acid codon: {0:?}")]
     InvalidCodon(String),
     /// An [`IoError`](std::io::Error)
     #[error("IO Error: {0:?}")]

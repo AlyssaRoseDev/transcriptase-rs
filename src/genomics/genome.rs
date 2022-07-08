@@ -1,4 +1,4 @@
-use super::prelude::{DNA, RNA};
+use super::nucleotide::{DNA, RNA};
 use crate::{err::TXaseError, fasta::Sequence};
 use rayon::prelude::*;
 use std::{
@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+/// A sequence of [`DNA`] nucleotides
 #[derive(Debug, Clone)]
 pub struct DnaSeq(Vec<DNA>);
 
@@ -80,6 +81,7 @@ impl Display for DnaSeq {
     }
 }
 
+/// A sequence of [`RNA`] nucleotides
 #[derive(Debug)]
 pub struct RnaSeq(Vec<RNA>);
 

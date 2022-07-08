@@ -3,7 +3,6 @@ use std::str::Lines;
 
 use crate::err::{TXaseError, TXaseResult};
 use crate::fasta::Sequence;
-use memchr::memmem::{find_iter, FindIter};
 use quality::Quality;
 pub use quality::{Phred, Solexa};
 use rayon::prelude::*;
