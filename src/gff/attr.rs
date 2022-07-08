@@ -2,70 +2,72 @@ use crate::{
     err::{TXaseError, TXaseResult},
     gff::{parsers::strand, Strand},
 };
-use either::Either;
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Attribute {
-    Name(Box<str>),
-    Alias(Box<str>),
-    Parent(Vec<Id>),
-    Target {
-        target_id: Id,
-        start: usize,
-        end: usize,
-        strand: Option<Strand>,
-    },
-    Gap(Vec<(GapKind, usize)>),
-    DerivesFrom(Id),
-    Note(Box<str>),
-    DbxRef(Box<str>),
-    OntologyTerm(Box<str>),
-    IsCircular(bool),
-    Other(Box<str>, Box<str>),
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+pub struct AttributeSet {
+    pub id: Option<Id>,
+    pub name: Option<Box<str>>,
+    pub alias: Option<Box<str>>,
+    pub parent: Option<Vec<Id>>,
+    pub target: Option<TargetAttr>,
+    pub gap: Option<Vec<(GapKind, usize)>>,
+    pub derives_from: Option<Id>,
+    pub note: Option<Box<str>>,
+    pub dbx_ref: Option<Box<str>>,
+    pub ontology_term: Option<Box<str>>,
+    pub is_circular: Option<()>,
+    pub other: Option<Vec<(Box<str>, Box<str>)>>,
 }
 
-impl Attribute {
-    pub(crate) fn parse(src: &str) -> TXaseResult<Either<Self, Id>> {
-        let (tag, value) = src.split_once('=').ok_or_else(|| {
-            TXaseError::InvalidAttribute(format!(
-                "Invalid attribute, expected tag=value, got {src}"
-            ))
-        })?;
-        Ok(if tag == "ID" {
-            Either::Right(value.into())
-        } else {
-            Either::Left(Self::parse_kind(tag, value)?)
-        })
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TargetAttr {
+    target_id: Id,
+    start: usize,
+    end: usize,
+    strand: Option<Strand>,
+}
 
-    pub(crate) fn parse_kind(src: &str, value: &str) -> TXaseResult<Self> {
-        Ok(match src {
-        "Name" => Self::Name(src.into()),
-        "Alias" => Self::Alias(src.into()),
-        "Parent" => Self::Parent(value.split(',').map(Id::from).collect()),
+impl AttributeSet {
+    pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
+        let mut attrs = AttributeSet::default();
+        let attr_iter = src.split(';').flat_map(|attr| {
+            attr.split_once('=').ok_or_else(|| {
+                TXaseError::InvalidAttribute(format!(
+                    "Invalid attribute, expected tag=value, got {src}"
+                ))
+            })
+        });
+        for (tag, value) in attr_iter {
+            match tag {
+        "Name" => attrs.name = Some(value.into()),
+        "Alias" => attrs.alias = Some(value.into()),
+        "Parent" => attrs.parent = Some(value.split(',').map(Id::from).collect()),
         "Target" => {
             let mut parts = value.split(' ');
             let target_id = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?.into();
             let start = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
             let end = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
             let strand = parts.next().map(|st| strand(st).map(|(_, strand)| strand)).transpose()?.flatten().map(Strand::parse).transpose()?;
-            Self::Target { target_id, start, end, strand }
+            attrs.target = Some(TargetAttr { target_id, start, end, strand })
         },
-        "Gap" => Self::Gap(src.split(' ').map(|gap| -> TXaseResult<(GapKind, usize)> {
+        "Gap" => attrs.gap = Some(value.split(' ').map(|gap| {
             let (kind, len) = gap.split_at(0);
             Ok((GapKind::parse(kind)?, len.parse::<usize>()?))
-        }).collect::<TXaseResult<Vec<(GapKind, usize)>>>()?),
-        "Derives_from" => Self::DerivesFrom(value.into()),
-        "Note" => Self::Note(value.into()),
-        "Dbxref" => Self::DbxRef(value.into()),
-        "Ontology_term" => Self::OntologyTerm(value.into()),
+        }).collect::<TXaseResult<Vec<_>>>()?),
+        "Derives_from" => attrs.derives_from = Some(value.into()),
+        "Note" => attrs.note = Some(value.into()),
+        "Dbxref" => attrs.dbx_ref = Some(value.into()),
+        "Ontology_term" => attrs.ontology_term = Some(value.into()),
         "Is_circular" => match value {
-            "true" => Self::IsCircular(true),
-            "false" => Self::IsCircular(false),
+            "true" => attrs.is_circular = Some(()),
+            "false" => continue,
             val => return Err(TXaseError::InvalidAttribute(format!("Invalid Is_circular attribute expected one of ['true', 'false'], got: {val}")))
         },
         tag if tag.chars().next().ok_or_else(|| TXaseError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXaseError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
-        tag => Self::Other(tag.into(), value.into()),
-    })
+        tag => attrs.other.get_or_insert(Vec::new()).push((tag.into(), value.into())),
+    }
+        }
+        Ok(attrs)
     }
 }
 

@@ -73,10 +73,10 @@ pub(crate) fn phase(src: &str) -> IResult<&str, Option<u8>, ErrorTree<&str>> {
     })
 }
 
-pub(crate) fn attributes(src: &str) -> IResult<&str, Vec<&str>, ErrorTree<&str>> {
+pub(crate) fn attributes(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
     const VALID: &str =
-        r#"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%=, "'()/"#;
-    separated_list0(tag(";"), is_a(VALID)).parse(src)
+        r#"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%=, "'()/;"#;
+    is_a(VALID).parse(src)
 }
 
 type RawEntry<'a> = (
@@ -88,7 +88,7 @@ type RawEntry<'a> = (
     Option<f64>,
     Option<char>,
     Option<u8>,
-    Vec<&'a str>,
+    &'a str,
 );
 
 pub(crate) fn entry(src: &str) -> IResult<&str, RawEntry<'_>, ErrorTree<&str>> {

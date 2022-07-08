@@ -1,51 +1,51 @@
-use std::str::FromStr;
+use std::{io::Read, str::FromStr};
 
 use crate::err::{TXaseError, TXaseResult};
-use attr::{Attribute, Id};
-use either::Either;
+use attr::AttributeSet;
 use nom::{bytes::complete::is_a, Parser};
 
-mod attr;
+pub mod attr;
 mod parsers;
 #[cfg(test)]
 mod test;
 
+/// A Generic Feature Format Version 3 file including both metadata and entries
 #[derive(Debug, Clone)]
 pub struct GFF {
-    meta: Vec<Metadata>,
-    entries: Vec<Entry>,
+    /// A list of the [`Metadata`]
+    pub meta: Vec<Metadata>,
+    /// A list of the entries
+    pub entries: Vec<Entry>,
 }
 
 impl GFF {
-    pub fn parse(src: &impl AsRef<str>) -> TXaseResult<Self> {
-        fn inner(this: &str) -> TXaseResult<GFF> {
-            let mut meta = Vec::new();
-            let mut entries = Vec::new();
-            for line in this.lines() {
-                if line.starts_with('#') {
-                    if let Some(metadata) = Metadata::parse(line)? {
-                        meta.push(metadata);
-                    }
-                } else {
-                    entries.push(Entry::parse(line)?);
-                }
-            }
-
-            Ok(GFF { meta, entries })
-        }
-        inner(src.as_ref())
-    }
-
-    #[must_use]
-    pub fn metadata(&self) -> &Vec<Metadata> {
-        &self.meta
-    }
-
-    #[must_use]
-    pub fn entries(&self) -> &Vec<Entry> {
-        &self.entries
+    /// Attempts to parse the given [`Reader`](std::io::Read) as a GFFv3-formatted input
+    pub fn parse(src: &mut impl Read) -> TXaseResult<Self> {
+        let mut temp = String::new();
+        src.read_to_string(&mut temp)?;
+        temp.parse()
     }
 }
+
+impl FromStr for GFF {
+    type Err = TXaseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut meta = Vec::new();
+        let mut entries = Vec::new();
+        for line in s.lines() {
+            match Metadata::parse(line) {
+                Ok(Some(metadata)) => meta.push(metadata),
+                Ok(None) => continue,
+                Err(_) => entries.push(Entry::parse(line)?),
+            }
+        }
+
+        Ok(GFF { meta, entries })
+    }
+}
+
+pub struct Meta;
 
 #[derive(Debug, Clone)]
 pub enum Metadata {
@@ -73,31 +73,17 @@ pub struct Entry {
     pub score: Option<f64>,
     pub strand: Option<Strand>,
     pub phase: Option<u8>,
-    pub id: Option<Id>,
-    pub attrs: Vec<Attribute>,
+    pub attrs: AttributeSet,
 }
 
 impl Entry {
-    // GFF Entry line:
-    // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
     pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
+        // GFF Entry line:
+        // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
         let (_, raw) = parsers::entry(src)?;
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
             raw;
-        let mut id = None;
-        let mut attrs = Vec::new();
-        for &attr in &attributes {
-            match Attribute::parse(attr)? {
-                Either::Left(attribute) => attrs.push(attribute),
-                Either::Right(id_attr) => {
-                    if id.is_none() {
-                        id = Some(id_attr);
-                    } else {
-                        return Err(TXaseError::DuplicateGFFEntryID());
-                    }
-                }
-            }
-        }
+        let attrs = AttributeSet::parse(attributes)?;
         Ok(Self {
             seq_id: UnescapedString::new(seq)?,
             source: UnescapedString::new(source)?,
@@ -106,7 +92,6 @@ impl Entry {
             score,
             strand: strand.map(Strand::parse).transpose()?,
             phase,
-            id,
             attrs,
         })
     }
