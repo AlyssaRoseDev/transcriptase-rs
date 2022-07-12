@@ -7,6 +7,8 @@ use nom::{
 };
 use nom_supreme::{error::ErrorTree, ParserExt};
 
+use crate::err::TXaseResult;
+
 pub(crate) fn undefined<T>(src: &str) -> IResult<&str, Option<T>, ErrorTree<&str>> {
     char::<&str, ErrorTree<&str>>('.')
         .parse(src)
@@ -91,7 +93,7 @@ type RawEntry<'a> = (
     &'a str,
 );
 
-pub(crate) fn entry(src: &str) -> IResult<&str, RawEntry<'_>, ErrorTree<&str>> {
+pub(crate) fn entry(src: &str) -> TXaseResult<RawEntry<'_>> {
     tuple((
         terminated(seq_id, tag("\t")),
         terminated(source, tag("\t")),
@@ -104,5 +106,6 @@ pub(crate) fn entry(src: &str) -> IResult<&str, RawEntry<'_>, ErrorTree<&str>> {
         attributes,
     ))
     .all_consuming()
-    .parse(src)
+    .parse(src).map(|(_, raw)| raw)
+    .map_err(Into::into)
 }

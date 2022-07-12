@@ -1,7 +1,8 @@
-use std::{io::Read, str::FromStr};
+use std::{io::Read, str::FromStr, collections::HashMap, ops::Range};
 
 use crate::err::{TXaseError, TXaseResult};
 use attr::AttributeSet;
+use either::Either;
 use nom::{bytes::complete::is_a, Parser};
 
 pub mod attr;
@@ -69,7 +70,7 @@ pub struct Entry {
     pub seq_id: UnescapedString,
     pub source: UnescapedString,
     pub feature_type: UnescapedString,
-    pub range: (usize, usize),
+    pub range: Range<usize>,
     pub score: Option<f64>,
     pub strand: Option<Strand>,
     pub phase: Option<u8>,
@@ -80,15 +81,14 @@ impl Entry {
     pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
         // GFF Entry line:
         // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
-        let (_, raw) = parsers::entry(src)?;
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
-            raw;
+            parsers::entry(src)?;
         let attrs = AttributeSet::parse(attributes)?;
         Ok(Self {
             seq_id: UnescapedString::new(seq)?,
             source: UnescapedString::new(source)?,
             feature_type: UnescapedString::new(feature_type)?,
-            range: (range_start, range_end),
+            range: range_start..range_end,
             score,
             strand: strand.map(Strand::parse).transpose()?,
             phase,
