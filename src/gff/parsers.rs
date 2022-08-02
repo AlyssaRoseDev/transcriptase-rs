@@ -17,7 +17,7 @@ pub(crate) fn undefined<T>(src: &str) -> IResult<&str, Option<T>, ErrorTree<&str
 
 pub(crate) fn seq_id(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
     const VALID: &str =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%";
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%>";
     is_a(VALID)
         .verify(|&id: &&str| !id.starts_with('>'))
         .parse(src)
@@ -106,6 +106,7 @@ pub(crate) fn entry(src: &str) -> TXaseResult<RawEntry<'_>> {
         attributes,
     ))
     .all_consuming()
-    .parse(src).map(|(_, raw)| raw)
+    .parse(src)
+    .map(|(_, raw)| raw)
     .map_err(Into::into)
 }

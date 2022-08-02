@@ -1,11 +1,20 @@
-use std::{io::Read, str::FromStr, collections::HashMap, ops::Range};
+use std::{
+    collections::{hash_map::Entry as MapEntry, HashMap},
+    fmt,
+    io::Read,
+    iter::once,
+    ops::Range,
+    str::FromStr,
+};
 
 use crate::err::{TXaseError, TXaseResult};
 use attr::AttributeSet;
 use either::Either;
+use meta::Metadata;
 use nom::{bytes::complete::is_a, Parser};
 
 pub mod attr;
+pub mod meta;
 mod parsers;
 #[cfg(test)]
 mod test;
@@ -14,7 +23,7 @@ mod test;
 #[derive(Debug, Clone)]
 pub struct GFF {
     /// A list of the [`Metadata`]
-    pub meta: Vec<Metadata>,
+    pub metadata: Metadata,
     /// A list of the entries
     pub entries: Vec<Entry>,
 }
@@ -32,39 +41,34 @@ impl FromStr for GFF {
     type Err = TXaseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut meta = Vec::new();
+        let mut metadata = Metadata::default();
         let mut entries = Vec::new();
         for line in s.lines() {
-            match Metadata::parse(line) {
-                Ok(Some(metadata)) => meta.push(metadata),
-                Ok(None) => continue,
-                Err(_) => entries.push(Entry::parse(line)?),
+            if let Ok((tag, meta)) = is_a::<_, _, ()>("#").parse(line) {
+                match tag {
+                    "###" => break,
+                    "##" => metadata.parse_metadata(meta)?,
+                    "#" => {
+                        if meta.starts_with('!') {
+                            metadata.parse_domain_metadata(meta)?;
+                        } else {
+                            continue;
+                        }
+                    }
+                    _ => {
+                        return Err(TXaseError::InternalParseFailure(format!(
+                            "Invalid metadata line: {line}"
+                        )))
+                    }
+                }
+            } else {
+                entries.push(Entry::from_str(line)?)
             }
         }
 
-        Ok(GFF { meta, entries })
+        Ok(GFF { metadata, entries })
     }
 }
-
-pub struct Meta;
-
-#[derive(Debug, Clone)]
-pub enum Metadata {
-    Pragma(UnescapedString),
-    Other(UnescapedString),
-}
-
-impl Metadata {
-    pub(crate) fn parse(src: &str) -> TXaseResult<Option<Self>> {
-        let (tag, meta) = is_a("#").parse(src)?;
-        Ok(match tag {
-            "##" => Some(Self::Pragma(UnescapedString::new(meta)?)),
-            "#" => Some(Self::Other(UnescapedString::new(meta)?)),
-            _ => None,
-        })
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub seq_id: UnescapedString,
@@ -144,5 +148,11 @@ impl UnescapedString {
         } else {
             Ok(Self(src.into()))
         }
+    }
+}
+
+impl fmt::Display for UnescapedString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.as_ref())
     }
 }
