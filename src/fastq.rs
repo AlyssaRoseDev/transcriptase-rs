@@ -60,7 +60,7 @@ where
                     ))
                 },
             )
-            .collect::<Result<HashMap<Descriptor, QualitySequence<S::Inner, Q>>, TXaseError>>()?;
+            .collect::<Result<Vec<(Descriptor, QualitySequence<S::Inner, Q>)>, TXaseError>>()?;
         Ok(Self { sequences })
     }
 }

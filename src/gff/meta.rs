@@ -123,6 +123,6 @@ impl Metadata {
         .all_consuming()
         .parse(seq_region)
         .map_err(Into::into)
-        .and_then(|(_, (seq_id, (start, end)))| Ok((seq_id, start..end)))
+        .map(|(_, (seq_id, (start, end)))| (seq_id, start..end))
     }
 }
