@@ -1,15 +1,7 @@
-use std::{
-    collections::{hash_map::Entry as MapEntry, HashMap},
-    fmt,
-    io::Read,
-    iter::once,
-    ops::Range,
-    str::FromStr,
-};
+use std::{fmt, io::Read, ops::Range, str::FromStr};
 
 use crate::err::{TXaseError, TXaseResult};
 use attr::AttributeSet;
-use either::Either;
 use meta::Metadata;
 use nom::{bytes::complete::is_a, Parser};
 
@@ -48,17 +40,11 @@ impl FromStr for GFF {
                 match tag {
                     "###" => break,
                     "##" => metadata.parse_metadata(meta)?,
-                    "#" => {
-                        if meta.starts_with('!') {
-                            metadata.parse_domain_metadata(meta)?;
-                        } else {
-                            continue;
-                        }
+                    "#" if meta.starts_with('!') => {
+                        metadata.parse_domain_metadata(meta)?;
                     }
                     _ => {
-                        return Err(TXaseError::InternalParseFailure(format!(
-                            "Invalid metadata line: {line}"
-                        )))
+                        continue;
                     }
                 }
             } else {

@@ -48,12 +48,27 @@ impl Metadata {
                         Some(HashMap::from([(UnescapedString::new(seq_id)?, range)]));
                 }
             }
-            "feature-ontology" => todo!(),
-            "attribute-ontology" => todo!(),
-            "source-ontology" => todo!(),
-            "species" => todo!(),
-            "genome-build" => todo!(),
-            _ => todo!(),
+            //TODO: Add proper uri parsing to ontology & species metaattributes
+            "feature-ontology" => self.feature_ontology_uri = Some(UnescapedString::new(rem)?),
+            "attribute-ontology" => self.attribute_ontology_uri = Some(UnescapedString::new(rem)?),
+            "source-ontology" => self.source_ontology_uri = Some(UnescapedString::new(rem)?),
+            "species" => self.species_uri = Some(UnescapedString::new(rem)?),
+            "genome-build" => {
+                let genome_build = rem
+                    .split_once(' ')
+                    .ok_or_else(|| {
+                        TXaseError::InternalParseFailure(format!(
+                            "Invalid genome-build data: {rem}, expected: [source buildName]"
+                        ))
+                    })
+                    .and_then(|(l, r)| Ok((UnescapedString::new(l)?, UnescapedString::new(r)?)))?;
+                self.genome_build = Some(genome_build);
+            }
+            _ => {
+                return Err(TXaseError::InternalParseFailure(format!(
+                    "Invalid meta-attribute {kind}"
+                )))
+            }
         };
         Ok(())
     }
@@ -108,6 +123,6 @@ impl Metadata {
         .all_consuming()
         .parse(seq_region)
         .map_err(Into::into)
-        .and_then(|(_, (seq_id, (start, end)))| Ok((seq_id, start..end)))
+        .map(|(_, (seq_id, (start, end)))| (seq_id, start..end))
     }
 }
