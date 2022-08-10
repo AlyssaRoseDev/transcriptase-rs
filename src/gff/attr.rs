@@ -27,7 +27,14 @@ pub struct TargetAttr {
     strand: Option<Strand>,
 }
 
+impl fmt::Display for TargetAttr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#?}", self)
+    }
+}
+
 impl AttributeSet {
+    #[tracing::instrument]
     pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
         let mut attrs = AttributeSet::default();
         let attr_iter = src.split(';').flat_map(|attr| {
@@ -92,7 +99,21 @@ pub enum GapKind {
     RevFrameShift,
 }
 
+impl fmt::Display for GapKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let c = match self {
+            GapKind::Match => 'M',
+            GapKind::Insert => 'I',
+            GapKind::Delete => 'D',
+            GapKind::FwdFrameShift => 'F',
+            GapKind::RevFrameShift => 'R',
+        };
+        write!(f, "{}", c)
+    }
+}
+
 impl GapKind {
+    #[tracing::instrument]
     pub fn parse(src: &str) -> TXaseResult<Self> {
         Ok(match src {
             "M" => Self::Match,

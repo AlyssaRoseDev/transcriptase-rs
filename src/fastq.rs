@@ -76,6 +76,7 @@ where
     TXaseError: From<<Q as TryFrom<char>>::Error>,
     TXaseError: From<<S::Inner as TryFrom<char>>::Error>,
 {
+    #[tracing::instrument(skip_all)]
     pub fn parse(src: &str) -> TXaseResult<Self> {
         let sequences = LineSets::new(src)
             .into_par_iter()

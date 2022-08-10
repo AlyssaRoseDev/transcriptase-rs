@@ -26,6 +26,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    #[tracing::instrument]
     pub(crate) fn parse_metadata(&mut self, line: &str) -> TXaseResult<()> {
         let (kind, rem) = line.split_once(' ').ok_or_else(|| {
             TXaseError::InternalParseFailure(format!("GFF pragma did not contain data: {line}"))

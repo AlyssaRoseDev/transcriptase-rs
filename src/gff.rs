@@ -22,6 +22,7 @@ pub struct GFF {
 
 impl GFF {
     /// Attempts to parse the given [`Reader`](std::io::Read) as a GFFv3-formatted input
+    #[tracing::instrument(skip_all)]
     pub fn parse(src: &mut impl Read) -> TXaseResult<Self> {
         let mut temp = String::new();
         src.read_to_string(&mut temp)?;
@@ -32,6 +33,7 @@ impl GFF {
 impl FromStr for GFF {
     type Err = TXaseError;
 
+    #[tracing::instrument(skip_all)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut metadata = Metadata::default();
         let mut entries = Vec::new();
@@ -68,6 +70,7 @@ pub struct Entry {
 }
 
 impl Entry {
+    #[tracing::instrument]
     pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
         // GFF Entry line:
         // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
@@ -103,6 +106,7 @@ pub enum Strand {
 }
 
 impl Strand {
+    #[tracing::instrument(name = "Strand::parse")]
     pub fn parse(src: char) -> TXaseResult<Self> {
         Ok(match src {
             '+' => Self::Positive,
@@ -121,6 +125,7 @@ impl Strand {
 pub struct UnescapedString(Box<str>);
 
 impl UnescapedString {
+    #[tracing::instrument(name = "UnescapedString::new")]
     pub fn new(src: &str) -> TXaseResult<Self> {
         if src.contains('%') {
             let mut escaped = src.to_owned();
