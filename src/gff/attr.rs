@@ -5,20 +5,22 @@ use crate::{
     gff::{parsers::strand, Strand},
 };
 
+use super::UnescapedString;
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct AttributeSet {
     pub id: Option<Id>,
-    pub name: Option<Box<str>>,
-    pub alias: Option<Box<str>>,
+    pub name: Option<UnescapedString>,
+    pub alias: Option<UnescapedString>,
     pub parent: Option<Vec<Id>>,
     pub target: Option<TargetAttr>,
     pub gap: Option<Vec<(GapKind, usize)>>,
     pub derives_from: Option<Id>,
-    pub note: Option<Box<str>>,
-    pub dbx_ref: Option<Box<str>>,
-    pub ontology_term: Option<Box<str>>,
-    pub is_circular: Option<()>,
-    pub other: Option<Vec<(Box<str>, Box<str>)>>,
+    pub note: Option<UnescapedString>,
+    pub dbx_ref: Option<UnescapedString>,
+    pub ontology_term: Option<UnescapedString>,
+    pub is_circular: Option<bool>,
+    pub other: Option<Vec<(Box<str>, UnescapedString)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -49,8 +51,8 @@ impl AttributeSet {
         for (tag, value) in attr_iter {
             match tag {
                 "ID" => attrs.id = Some(Id::new(value)),
-                "Name" => attrs.name = Some(value.into()),
-                "Alias" => attrs.alias = Some(value.into()),
+                "Name" => attrs.name = Some(UnescapedString::new(value)?),
+                "Alias" => attrs.alias = Some(UnescapedString::new(value)?),
                 "Parent" => attrs.parent = Some(value.split(',').map(Id::new).collect()),
                 "Target" => {
                     let mut parts = value.split(' ');
@@ -65,16 +67,16 @@ impl AttributeSet {
                     Ok((GapKind::parse(kind)?, len.parse::<usize>()?))
                 }).collect::<TXaseResult<Vec<_>>>()?),
                 "Derives_from" => attrs.derives_from = Some(Id::new(value)),
-                "Note" => attrs.note = Some(value.into()),
-                "Dbxref" => attrs.dbx_ref = Some(value.into()),
-                "Ontology_term" => attrs.ontology_term = Some(value.into()),
+                "Note" => attrs.note = Some(UnescapedString::new(value)?),
+                "Dbxref" => attrs.dbx_ref = Some(UnescapedString::new(value)?),
+                "Ontology_term" => attrs.ontology_term = Some(UnescapedString::new(value)?),
                 "Is_circular" => match value {
-                    "true" => attrs.is_circular = Some(()),
-                    "false" => continue,
+                    "true" => attrs.is_circular = Some(true),
+                    "false" => attrs.is_circular = Some(false),
                     val => return Err(TXaseError::InvalidAttribute(format!("Invalid Is_circular attribute expected one of ['true', 'false'], got: {val}")))
                 },
                 tag if tag.chars().next().ok_or_else(|| TXaseError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXaseError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
-                tag => attrs.other.get_or_insert(Vec::new()).push((tag.into(), value.into())),
+                tag => attrs.other.get_or_insert(Vec::new()).push((tag.into(), UnescapedString::new(value)?)),
             }
         }
         tracing::debug!("{}", attrs);

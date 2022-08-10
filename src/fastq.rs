@@ -97,7 +97,6 @@ where
                                 Ok(first)
                             }
                         )?;
-                    tracing::trace!("FastQ description found: {}", desc);
                     Ok((
                         desc.to_string(),
                         line_set[1].as_bytes().into_par_iter()
@@ -157,6 +156,7 @@ mod parsers {
 
     use crate::err::TXaseResult;
 
+    #[tracing::instrument(level = "trace")]
     pub fn desc_line<'src>(
         src: &'src str,
         desc_tag: &'static str,
