@@ -5,6 +5,7 @@ use crate::err::{TXaseError, TXaseResult};
 use crate::fasta::Sequence;
 use quality::Quality;
 pub use quality::{Phred, Solexa};
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 pub mod quality;
@@ -22,7 +23,10 @@ impl<S, Q> FastQ<S, Q>
 where
     S: Sequence,
     Q: Quality,
+    TXaseError: From<<Q as TryFrom<char>>::Error>,
+    TXaseError: From<<S::Inner as TryFrom<char>>::Error>,
 {
+    #[tracing::instrument(skip_all)]
     pub fn parse(src: &str) -> TXaseResult<Self> {
         let sequences = LineSets::new(src)
             .map(
@@ -36,7 +40,7 @@ where
                         .and_then(
                             |first| if let Some(second) = parsers::desc_line(line_set[2], "+")? {
                                 (first == second)
-                                .then(|| first)
+                                .then_some(first)
                                 .ok_or_else(|| TXaseError::InternalParseFailure(format!("Line three contained a description that did not match the original description!\nExpected: {first:?}, Got: {second:?}")))
                             } else {
                                 Ok(first)
@@ -46,21 +50,17 @@ where
                         desc.to_string(),
                         line_set[1]
                             .chars()
-                            .map(S::Inner::try_from)
-                            .collect::<Result<Vec<S::Inner>, _>>()?
-                            .into_iter()
                             .zip(
                                 line_set[3]
                                     .chars()
-                                    .map(Q::try_from)
-                                    .collect::<Result<Vec<Q>, _>>()?
-                                    .into_iter(),
-                            )
-                            .collect(),
+                            ).map(|(s, q)| -> TXaseResult<_> {
+                                Ok((S::Inner::try_from(s)?, Q::try_from(q)?))
+                            })
+                            .collect::<TXaseResult<_>>()?,
                     ))
                 },
             )
-            .collect::<Result<Vec<(Descriptor, QualitySequence<S::Inner, Q>)>, TXaseError>>()?;
+            .collect::<Result<HashMap<Descriptor, QualitySequence<S::Inner, Q>>, TXaseError>>()?;
         Ok(Self { sequences })
     }
 }
@@ -90,27 +90,23 @@ where
                         .and_then(
                             |first| if let Some(second) = parsers::desc_line(line_set[2], "+")? {
                                 (first == second)
-                                .then(|| first)
+                                .then_some(first)
                                 .ok_or_else(|| TXaseError::InternalParseFailure(format!("Line three contained a description that did not match the original description!\nExpected: {first:?}, Got: {second:?}")))
                             } else {
                                 Ok(first)
                             }
                         )?;
+                    tracing::trace!("FastQ description found: {}", desc);
                     Ok((
                         desc.to_string(),
-                        line_set[1]
-                            .par_chars()
-                            .map(S::Inner::try_from)
-                            .collect::<Result<Vec<S::Inner>, _>>()?
-                            .into_par_iter()
+                        line_set[1].as_bytes().into_par_iter()
                             .zip(
-                                line_set[3]
-                                    .par_chars()
-                                    .map(Q::try_from)
-                                    .collect::<Result<Vec<Q>, _>>()?
-                                    .into_par_iter(),
+                                line_set[3].as_bytes().into_par_iter()
                             )
-                            .collect(),
+                            .map(|(s, q)| -> TXaseResult<_> {
+                                Ok((S::Inner::try_from(char::from(*s))?, Q::try_from(char::from(*q))?))
+                            })
+                            .collect::<TXaseResult<_>>()?,
                     ))
                 },
             )
@@ -144,6 +140,7 @@ impl<'a> Iterator for LineSets<'a> {
     }
 }
 
+#[cfg(feature = "rayon")]
 impl<'a> IntoParallelIterator for LineSets<'a> {
     type Iter = rayon::vec::IntoIter<[&'a str; 4]>;
 
