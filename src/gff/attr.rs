@@ -124,8 +124,8 @@ impl fmt::Display for AttributeSet {
         opt_field!(f, self, note);
         opt_field!(f, self, dbx_ref);
         opt_field!(f, self, ontology_term);
-        if let Some(_) = self.is_circular {
-            writeln!(f, "is_circular: true")?;
+        if let Some(circular) = self.is_circular {
+            writeln!(f, "is_circular: {circular}")?;
         }
         if let Some(ref others) = self.other {
             for (key, val) in others {
