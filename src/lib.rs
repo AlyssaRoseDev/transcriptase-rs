@@ -1,5 +1,4 @@
 #![warn(missing_debug_implementations)]
-#![allow(clippy::missing_errors_doc)]
 
 pub mod err;
 pub mod fasta;

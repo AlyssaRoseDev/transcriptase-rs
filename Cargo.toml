@@ -14,6 +14,7 @@ memchr = "2.5.0"
 nom = "7.1.1"
 nom-supreme = "0.8.0"
 phf = { version = "0.10.1", features = ["macros"] }
+proptest = "1.0.0"
 rayon = {version = "1.5.3", optional = true }
 thiserror = "1.0.31"
 tracing = "0.1.34"
