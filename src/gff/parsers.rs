@@ -1,5 +1,5 @@
 use nom::{
-    bytes::complete::{is_a, tag, take_until1},
+    bytes::complete::{is_a, is_not, tag},
     character::complete::{char, one_of},
     number::complete::double,
     sequence::{terminated, tuple},
@@ -8,6 +8,8 @@ use nom::{
 use nom_supreme::{error::ErrorTree, ParserExt};
 
 use crate::err::TXaseResult;
+
+pub(crate) const RESERVED: &str = "\t\r\n";
 
 pub(crate) fn undefined<T>(src: &str) -> IResult<&str, Option<T>, ErrorTree<&str>> {
     char::<&str, ErrorTree<&str>>('.')
@@ -24,7 +26,7 @@ pub(crate) fn seq_id(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
 }
 
 pub(crate) fn source(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
-    take_until1("\t").parse(src)
+    is_not(RESERVED).parse(src)
 }
 
 pub(crate) fn feature_type(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
@@ -48,31 +50,27 @@ pub(crate) fn range_bound(src: &str) -> IResult<&str, usize, ErrorTree<&str>> {
 }
 
 pub(crate) fn score(src: &str) -> IResult<&str, Option<f64>, ErrorTree<&str>> {
-    undefined(src).or_else(|_| double(src).map(|(rem, score)| (rem, Some(score))))
+    undefined(src).or(double(src).map(|(rem, score)| (rem, Some(score))))
 }
 
 pub(crate) fn strand(src: &str) -> IResult<&str, Option<char>, ErrorTree<&str>> {
-    const VALID: &str = "+-.?";
-    undefined(src).or_else(|_| {
-        one_of(VALID)
-            .parse(src)
-            .map(|(rem, strand)| (rem, Some(strand)))
-    })
+    const VALID: &str = "+-?";
+    undefined(src).or(one_of(VALID)
+        .parse(src)
+        .map(|(rem, strand)| (rem, Some(strand))))
 }
 
 pub(crate) fn phase(src: &str) -> IResult<&str, Option<u8>, ErrorTree<&str>> {
     const VALID: &str = "012";
-    undefined(src).or_else(|_| {
-        one_of(VALID).parse(src).map(|(rem, phase)| {
-            let phase = match phase {
-                '0' => 0u8,
-                '1' => 1u8,
-                '2' => 2u8,
-                _ => unreachable!(),
-            };
-            (rem, Some(phase))
-        })
-    })
+    undefined(src).or(one_of(VALID).parse(src).map(|(rem, phase)| {
+        let phase = match phase {
+            '0' => 0u8,
+            '1' => 1u8,
+            '2' => 2u8,
+            _ => unreachable!(),
+        };
+        (rem, Some(phase))
+    }))
 }
 
 pub(crate) fn attributes(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
