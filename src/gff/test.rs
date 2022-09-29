@@ -1,83 +1,55 @@
-use nom::{
-    bytes::complete::tag,
-    sequence::{terminated, tuple},
-    Parser,
-};
-use nom_supreme::ParserExt;
+use proptest::prelude::*;
 
-use crate::err::TXaseResult;
+use super::parsers::*;
 
-const TEST_ENTRY: &str = "NC_045512.2	RefSeq	region	1	29903	.	+	.	ID=NC_045512.2:1..29903;Dbxref=taxon:2697049;collection-date=Dec-2019;country=China;gb-acronym=SARS-CoV-2;gbkey=Src;genome=genomic;isolate=Wuhan-Hu-1;mol_type=genomic RNA;nat-host=Homo sapiens;old-name=Wuhan seafood market pneumonia virus";
-const TEST_ENTRY_TWO: &str =
-    r#"NC_045512.2	RefSeq	five_prime_UTR	1	265	.	+	.	ID=id-NC_045512.2:1..265;gbkey=5'UTR"#;
+macro_rules! assume {
+    ($e:expr) => {
+        prop_assert!($e.is_ok())
+    };
+}
 
-#[test]
-fn seq_id_test() {
-    let res = super::parsers::seq_id(TEST_ENTRY);
-    if let Ok((rem, seq)) = res {
-        println!("Sequence ID:");
-        println!("{seq}");
-        println!("Remainder:");
-        println!("{rem}");
+prop_compose! {
+    fn valid_ascii()(s in "[a-zA-Z0-9.:^*$@!+_?|%-]") -> String {
+        s
     }
 }
 
-#[test]
-fn tuple_test() {
-    let res = tuple((
-        terminated(super::parsers::seq_id, tag("\t")),
-        super::parsers::source,
-    ))
-    .parse(TEST_ENTRY);
-    if let Ok((rem, (seq, source))) = res {
-        println!("Sequence ID:");
-        println!("{seq}");
-        println!("Source:");
-        println!("{source}");
-        println!("Remainder:");
-        println!("{rem}");
+proptest! {
+    #[test]
+    fn seq_id(s in valid_ascii()) {
+        prop_assert!(super::parsers::seq_id(&s).is_ok())
     }
-}
-#[test]
-fn optionals() {
-    let res = tuple((
-        terminated(super::parsers::seq_id, tag("\t")),
-        terminated(super::parsers::source, tag("\t")),
-        terminated(super::parsers::feature_type, tag("\t")),
-        terminated(super::parsers::range_bound, tag("\t")),
-        terminated(super::parsers::range_bound, tag("\t")),
-        terminated(super::parsers::score, tag("\t")),
-        terminated(super::parsers::strand, tag("\t")),
-        terminated(super::parsers::phase, tag("\t")),
-        super::parsers::attributes,
-    ))
-    .all_consuming()
-    .parse(TEST_ENTRY_TWO);
-    let (_, (seq, source, feature_type, range_start, range_end, score, strand, phase, attrs)) =
-        res.unwrap();
-    println!("Sequence ID:");
-    println!("{seq}");
-    println!("Source:");
-    println!("{source}");
-    println!("Feature Type:");
-    println!("{feature_type}");
-    println!("Range:");
-    println!("{range_start} -> {range_end}");
-    println!("Score:");
-    println!("{score:?}");
-    println!("Strand:");
-    println!("{strand:?}");
-    println!("Phase:");
-    println!("{phase:?}");
-    println!("Attributes:");
-    println!("{attrs:?}");
-}
 
-#[test]
-fn full() -> TXaseResult<()> {
-    let mut file = std::fs::File::open(
-        r#"E:\Projects\sars-cov-2\transcriptase\GCF_009858895.2_ASM985889v3_genomic.gff"#,
-    )?;
-    dbg!(super::GFF::parse(&mut file)?);
-    Ok(())
+    //this should test for any valid unicode which is not a reserved character
+    //however, I am sleepy and cannot figure out how to define such a strategy
+    //TODO make this right
+    #[test]
+    fn sources(s in valid_ascii()) {
+        assume!(source(&s))
+    }
+
+    #[test]
+    fn feature_types(s in valid_ascii()) {
+        assume!(feature_type(&s))
+    }
+
+    #[test]
+    fn ranges(r in any::<usize>().prop_map(|r| r.to_string())) {
+        assume!(range_bound(&r))
+    }
+
+    #[test]
+    fn scores(s in any::<f64>().prop_map(|s| s.to_string())) {
+        assume!(score(&s))
+    }
+
+    #[test]
+    fn strands(s in "[.+?-]") {
+        assume!(strand(&s))
+    }
+
+    #[test]
+    fn phases(p in "[.012]") {
+        assume!(phase(&p))
+    }
 }
