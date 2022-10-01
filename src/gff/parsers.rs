@@ -30,9 +30,7 @@ pub(crate) fn source(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
 }
 
 pub(crate) fn feature_type(src: &str) -> IResult<&str, &str, ErrorTree<&str>> {
-    const VALID: &str =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%";
-    is_a(VALID).parse(src)
+    is_not(RESERVED).parse(src)
 }
 
 pub(crate) fn range_bound(src: &str) -> IResult<&str, usize, ErrorTree<&str>> {
