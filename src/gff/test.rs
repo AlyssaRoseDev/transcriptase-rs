@@ -36,14 +36,19 @@ macro_rules! strategy {
 strategy! {
     gen_seq_id => s in "[a-zA-Z0-9.:^*$@!+_?|%-]+",
     gen_source => s in any::<String>().prop_filter("Source must not contain reserved characters and must not be empty", |s| !s.contains(['\t', '\r', '\n']) && !s.is_empty()),
-    gen_range => r in any::<usize>().prop_filter_map("Ranges are 1 indexed and cannot be 0", |r| (r != 0).then_some(r.to_string())),
     gen_score => s in any::<Option<f64>>().prop_map(|r| if let Some(r) = r { r.to_string() } else { ".".to_string() }),
     gen_strand => s in "[.+?-]",
-    gen_phase => p in "[.012]",
+    gen_phase => p in "[.012]"
 }
 
 prop_compose! {
-    fn gen_full_range()(low in any::<usize>().prop_filter("Ranges are 1 indexed can cannot be 0", |&r| r != 0))(high in low..usize::MAX, low in Just(low)) -> (usize, usize) {
+    fn gen_range()(r in any::<usize>().prop_filter("Ranges are 1 indexed and cannot be 0", |&r| (r != 0))) -> usize {
+        r
+    }
+}
+
+prop_compose! {
+    fn gen_full_range(max: usize)(low in gen_range())(high in low..max, low in Just(low)) -> (usize, usize) {
        (low, high)
     }
 }
@@ -61,13 +66,14 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn gen_entry()(seq in gen_seq_id(), source in gen_source(), feature in gen_source(), range in gen_full_range(), score in gen_score(), strand in gen_strand(), phase in gen_phase(), attrs in gen_attr_list()) -> String {
+    fn gen_entry()(seq in gen_seq_id(), source in gen_source(), feature in gen_source(), range in gen_full_range(usize::MAX), score in gen_score(), strand in gen_strand(), phase in gen_phase(), attrs in gen_attr_list()) -> String {
         let (low, high) = range;
         format!("{seq}\t{source}\t{feature}\t{low}\t{high}\t{score}\t{strand}\t{phase}\t{attrs}")
     }
 }
 
 proptest! {
+    // ** Start Parser Tests **
     #[test]
     fn seq_ids(s in gen_seq_id()) {
         assume!(seq_id(&s))
@@ -84,12 +90,12 @@ proptest! {
     }
 
     #[test]
-    fn ranges(r in gen_range()) {
+    fn ranges(r in gen_range().prop_map(|r| r.to_string())) {
         assume!(range_bound(&r))
     }
 
     #[test]
-    fn no_neg_range(r in any::<isize>().prop_map(|r| r.abs().neg().to_string())) {
+    fn no_neg_range(r in (isize::MIN..-1).prop_map(|r| r.to_string())) {
         assume_err!(range_bound(&r))
     }
 
@@ -118,6 +124,8 @@ proptest! {
     fn full_entry(test in gen_entry()) {
         assume!(entry(&test))
     }
+
+    // ** End Parser Tests **
 }
 
 #[test]
