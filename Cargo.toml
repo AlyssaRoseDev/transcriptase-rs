@@ -11,6 +11,7 @@ rayon = ["dep:rayon"]
 [dependencies]
 either = "1.6.1"
 memchr = "2.5.0"
+miette = "5.3.0"
 nom = "7.1.1"
 nom-supreme = "0.8.0"
 phf = { version = "0.10.1", features = ["macros"] }
