@@ -2,7 +2,10 @@ use std::{borrow::Borrow, fmt};
 
 use crate::{
     err::{TXaseError, TXaseResult},
-    gff::{parsers::strand, Strand},
+    gff::{
+        parsers::{strand, ParseError},
+        Strand,
+    },
 };
 
 use super::UnescapedString;
@@ -59,7 +62,7 @@ impl AttributeSet {
                     let target_id = Id::new(parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?);
                     let start = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
                     let end = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
-                    let strand = parts.next().map(|st| strand(st).map(|(_, strand)| strand)).transpose()?.flatten().map(Strand::parse).transpose()?;
+                    let strand = parts.next().map(|st| strand(st).map(|(_, strand)| strand)).transpose().map_err(|e| e.to_string())?.flatten().map(Strand::parse).transpose()?;
                     attrs.target = Some(TargetAttr { target_id, start, end, strand })
                 },
                 "Gap" => attrs.gap = Some(value.split(' ').map(|gap| {

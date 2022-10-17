@@ -3,13 +3,31 @@ use std::{fmt, io::Read, ops::Range, str::FromStr};
 use crate::err::{TXaseError, TXaseResult};
 use attr::AttributeSet;
 use meta::Metadata;
+use miette::Diagnostic;
 use nom::{bytes::complete::is_a, Parser};
+use thiserror::Error;
 
 pub mod attr;
 pub mod meta;
 mod parsers;
 #[cfg(test)]
 mod test;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum GffError {
+    #[error("")]
+    InvalidAttribute,
+    #[error("")]
+    DuplicateSequence,
+    #[error("")]
+    InvalidGenomeBuild,
+    #[error("")]
+    NoData,
+    #[error("")]
+    ParseError(#[from] parsers::ParseError),
+    #[error("Failed to construct an Error")]
+    ErrFail,
+}
 
 /// A Generic Feature Format Version 3 file including both metadata and entries
 #[derive(Debug, Clone)]
@@ -42,9 +60,7 @@ impl FromStr for GFF {
                 match tag {
                     "###" => break,
                     "##" => metadata.parse_metadata(meta)?,
-                    "#" if meta.starts_with('!') => {
-                        metadata.parse_domain_metadata(meta)?;
-                    }
+                    "#" if meta.starts_with('!') => metadata.parse_domain_metadata(meta)?,
                     _ => {
                         continue;
                     }
@@ -75,7 +91,7 @@ impl Entry {
         // GFF Entry line:
         // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
-            parsers::entry(src)?;
+            parsers::entry(src).map_err(|_| TXaseError::InternalParseFailure(format!("")))?;
         let attrs = AttributeSet::parse(attributes)?;
         Ok(Self {
             seq_id: UnescapedString::new(seq)?,

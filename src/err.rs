@@ -50,9 +50,14 @@ type NomTreeErr<'a> = nom::Err<
         Box<dyn std::error::Error + Send + Sync>,
     >,
 >;
+impl From<nom::Err<nom::error::VerboseError<&str>>> for TXaseError {
+    fn from(e: nom::Err<nom::error::VerboseError<&str>>) -> Self {
+        Self::NomParsing(e.to_string())
+    }
+}
 
-impl From<NomTreeErr<'_>> for TXaseError {
-    fn from(src: NomTreeErr) -> Self {
-        Self::NomParsing(src.to_string())
+impl From<String> for TXaseError {
+    fn from(s: String) -> Self {
+        Self::InternalParseFailure(s)
     }
 }
