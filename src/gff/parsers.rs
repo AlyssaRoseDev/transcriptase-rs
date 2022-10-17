@@ -62,7 +62,7 @@ pub(crate) fn seq_id(src: &str) -> NomResult<'_, &str> {
 }
 
 #[test]
-fn whatthedogdoin() -> miette::Result<()> {
+fn error_example() -> miette::Result<()> {
     use nom::sequence::separated_pair;
     Ok((|ver| -> Result<(), ParseError> {
         final_parser(
