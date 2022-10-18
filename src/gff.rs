@@ -1,6 +1,5 @@
 use std::{fmt, io::Read, ops::Range, str::FromStr};
 
-use crate::err::{TXaseError, TXaseResult};
 use attr::AttributeSet;
 use meta::Metadata;
 use miette::Diagnostic;
@@ -15,18 +14,36 @@ mod test;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum GffError {
-    #[error("")]
+    #[error("Invalid Attribute found")]
     InvalidAttribute,
-    #[error("")]
+    #[error("Sequence ID must be unique")]
     DuplicateSequence,
-    #[error("")]
+    #[error("Invalid Genome Build")]
     InvalidGenomeBuild,
-    #[error("")]
+    #[error("Data bearing attribute had no data")]
     NoData,
-    #[error("")]
+    #[error("{0}")]
     ParseError(#[from] parsers::ParseError),
-    #[error("Failed to construct an Error")]
-    ErrFail,
+    #[error("Failed to decode an escaped string")]
+    StringDecodeErr,
+    #[error("Strand must be one of [. - + ?]")]
+    InvalidStrand,
+    #[error(transparent)]
+    IoErr(#[from] std::io::Error),
+    #[error("Most Meta-Attributes must be unique")]
+    DuplicateMetaAttribute,
+    #[error("Line was malformed and parsing could not continue")]
+    MalformedLine,
+    #[error("Failed to parse a value from string")]
+    FromStrErr,
+    #[error("Gap kind must be one of [M, I, D, F, R]")]
+    InvalidGapKind,
+    #[error("IsCircular must be a boolean")]
+    IsCircularNotBool,
+    #[error("Attributes starting with a capital letter are reserved.")]
+    ReservedAttribute,
+    #[error("Target Attribute must be in the form [target_id start end strand]")]
+    MalformedTarget,
 }
 
 /// A Generic Feature Format Version 3 file including both metadata and entries
@@ -41,7 +58,7 @@ pub struct GFF {
 impl GFF {
     /// Attempts to parse the given [`Reader`](std::io::Read) as a GFFv3-formatted input
     #[tracing::instrument(skip_all)]
-    pub fn parse(src: &mut impl Read) -> TXaseResult<Self> {
+    pub fn parse(src: &mut impl Read) -> Result<Self, GffError> {
         let mut temp = String::new();
         src.read_to_string(&mut temp)?;
         temp.parse()
@@ -49,7 +66,7 @@ impl GFF {
 }
 
 impl FromStr for GFF {
-    type Err = TXaseError;
+    type Err = GffError;
 
     #[tracing::instrument(skip_all)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -87,11 +104,11 @@ pub struct Entry {
 
 impl Entry {
     #[tracing::instrument]
-    pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
+    pub(crate) fn parse(src: &str) -> Result<Self, GffError> {
         // GFF Entry line:
         // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
         let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
-            parsers::entry(src).map_err(|_| TXaseError::InternalParseFailure(format!("")))?;
+            parsers::entry(src)?;
         let attrs = AttributeSet::parse(attributes)?;
         Ok(Self {
             seq_id: UnescapedString::new(seq)?,
@@ -107,7 +124,7 @@ impl Entry {
 }
 
 impl FromStr for Entry {
-    type Err = TXaseError;
+    type Err = GffError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Entry::parse(s)
@@ -123,16 +140,12 @@ pub enum Strand {
 
 impl Strand {
     #[tracing::instrument(name = "Strand::parse")]
-    pub fn parse(src: char) -> TXaseResult<Self> {
+    pub fn parse(src: char) -> Result<Self, GffError> {
         Ok(match src {
             '+' => Self::Positive,
             '-' => Self::Negative,
             '?' => Self::Unknown,
-            _ => {
-                return Err(TXaseError::InternalParseFailure(format!(
-                    "Unexpected Strand kind, expected one of: ['+', '-', '?'], got {src}"
-                )))
-            }
+            _ => return Err(GffError::InvalidStrand),
         })
     }
 }
@@ -142,13 +155,15 @@ pub struct UnescapedString(Box<str>);
 
 impl UnescapedString {
     #[tracing::instrument(name = "UnescapedString::new")]
-    pub fn new(src: &str) -> TXaseResult<Self> {
+    pub fn new(src: &str) -> Result<Self, GffError> {
         if src.contains('%') {
             let mut escaped = src.to_owned();
             while let Some(at) = escaped.find('%') {
                 let old = &escaped[at..][..3];
-                let byte = &[u8::from_str_radix(&old[1..3], 16)?];
-                let new = std::str::from_utf8(byte)?;
+                let byte = &[
+                    u8::from_str_radix(&old[1..3], 16).map_err(|_| GffError::StringDecodeErr)?
+                ];
+                let new = std::str::from_utf8(byte).map_err(|_| GffError::StringDecodeErr)?;
                 escaped = escaped.replace(old, new);
             }
             Ok(Self(escaped.into_boxed_str()))

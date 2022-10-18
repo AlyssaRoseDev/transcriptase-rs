@@ -1,5 +1,3 @@
-use std::ops::Neg;
-
 use proptest::prelude::*;
 
 use super::parsers::*;
@@ -19,32 +17,27 @@ macro_rules! assume_err {
 
 macro_rules! strategy {
     () => {};
-    ($fnid:ident => $id:ident in $e:expr) => {
+    ($fnid:ident: $ty:ty => $id:ident in $e:expr) => {
         prop_compose! {
-            fn $fnid()($id in $e) -> String {
+            fn $fnid()($id in $e) -> $ty {
                 $id
             }
         }
     };
 
-    ($fnid:ident => $id:ident in $e:expr, $($tail:tt)*) => {
-        strategy!($fnid => $id in $e);
+    ($fnid:ident: $ty:ty => $id:ident in $e:expr, $($tail:tt)*) => {
+        strategy!($fnid: $ty => $id in $e);
         strategy!{$($tail)*}
     };
 }
 
 strategy! {
-    gen_seq_id => s in "[a-zA-Z0-9.:^*$@!+_?|%-]+",
-    gen_source => s in any::<String>().prop_filter("Source must not contain reserved characters and must not be empty", |s| !s.contains(['\t', '\r', '\n']) && !s.is_empty()),
-    gen_score => s in any::<Option<f64>>().prop_map(|r| if let Some(r) = r { r.to_string() } else { ".".to_string() }),
-    gen_strand => s in "[.+?-]",
-    gen_phase => p in "[.012]"
-}
-
-prop_compose! {
-    fn gen_range()(r in any::<usize>().prop_filter("Ranges are 1 indexed and cannot be 0", |&r| (r != 0))) -> usize {
-        r
-    }
+    gen_seq_id: String => s in "[a-zA-Z0-9.:^*$@!+_?|%-]+",
+    gen_source: String => s in any::<String>().prop_filter("Source must not contain reserved characters and must not be empty", |s| !s.contains(['\t', '\r', '\n']) && !s.is_empty()),
+    gen_score: String => s in any::<Option<f64>>().prop_map(|r| if let Some(r) = r { r.to_string() } else { ".".to_string() }),
+    gen_strand: String => s in "[.+?-]",
+    gen_phase: String => p in "[.012]",
+    gen_range: usize => r in any::<usize>().prop_filter("Ranges are 1 indexed and cannot be 0", |&r| (r != 0))
 }
 
 prop_compose! {

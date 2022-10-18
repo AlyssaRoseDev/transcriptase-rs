@@ -3,15 +3,16 @@ use std::{
     ops::Range,
 };
 
-use super::UnescapedString;
-use crate::err::{TXaseError, TXaseResult};
+use super::{GffError, UnescapedString};
+use crate::gff::parsers::ParseError;
 use nom::{
     bytes::complete::{is_a, tag},
     character::complete::char,
-    sequence::separated_pair,
-    Parser,
+    combinator::map,
+    error::VerboseError,
+    sequence::{preceded, separated_pair},
 };
-use nom_supreme::ParserExt;
+use nom_supreme::{final_parser::final_parser, ParserExt};
 
 #[derive(Debug, Clone, Default)]
 pub struct Metadata {
@@ -27,10 +28,8 @@ pub struct Metadata {
 
 impl Metadata {
     #[tracing::instrument]
-    pub(crate) fn parse_metadata(&mut self, line: &str) -> TXaseResult<()> {
-        let (kind, rem) = line.split_once(' ').ok_or_else(|| {
-            TXaseError::InternalParseFailure(format!("GFF pragma did not contain data: {line}"))
-        })?;
+    pub(crate) fn parse_metadata(&mut self, line: &str) -> Result<(), GffError> {
+        let (kind, rem) = line.split_once(' ').ok_or(GffError::MalformedLine)?;
         match kind {
             "gff-version" => self.version = Some(Metadata::parse_version(rem)?),
             "sequence-region" => {
@@ -38,9 +37,7 @@ impl Metadata {
                 if let Some(ref mut map) = self.sequence_regions {
                     match map.entry(UnescapedString::new(seq_id)?) {
                         Entry::Occupied(_) => {
-                            return Err(TXaseError::InternalParseFailure(format!(
-                                "Duplicate key {seq_id} found"
-                            )));
+                            return Err(GffError::DuplicateSequence);
                         }
                         Entry::Vacant(e) => e.insert(range),
                     };
@@ -57,33 +54,21 @@ impl Metadata {
             "genome-build" => {
                 let genome_build = rem
                     .split_once(' ')
-                    .ok_or_else(|| {
-                        TXaseError::InternalParseFailure(format!(
-                            "Invalid genome-build data: {rem}, expected: [source buildName]"
-                        ))
-                    })
+                    .ok_or(GffError::InvalidGenomeBuild)
                     .and_then(|(l, r)| Ok((UnescapedString::new(l)?, UnescapedString::new(r)?)))?;
                 self.genome_build = Some(genome_build);
             }
-            _ => {
-                return Err(TXaseError::InternalParseFailure(format!(
-                    "Invalid meta-attribute {kind}"
-                )))
-            }
+            _ => return Err(GffError::InvalidAttribute),
         };
         Ok(())
     }
 
-    pub(crate) fn parse_domain_metadata(&mut self, line: &str) -> TXaseResult<()> {
-        let (key, val) = line.split_once(' ').ok_or_else(|| {
-            TXaseError::InternalParseFailure(format!("GFF pragma did not contain data: {line}"))
-        })?;
+    pub(crate) fn parse_domain_metadata(&mut self, line: &str) -> Result<(), GffError> {
+        let (key, val) = line.split_once(' ').ok_or(GffError::MalformedLine)?;
         if let Some(ref mut map) = self.other_meta {
             match map.entry(UnescapedString::new(key)?) {
                 Entry::Occupied(_) => {
-                    return Err(TXaseError::InternalParseFailure(format!(
-                        "Duplicate key {key} found"
-                    )));
+                    return Err(GffError::DuplicateMetaAttribute);
                 }
                 Entry::Vacant(e) => e.insert(UnescapedString::new(val)?),
             };
@@ -96,34 +81,33 @@ impl Metadata {
         Ok(())
     }
 
-    fn parse_version(ver: &str) -> TXaseResult<(u8, u8)> {
-        tag("3.")
-            .and(separated_pair(
+    fn parse_version(ver: &str) -> Result<(u8, u8), GffError> {
+        final_parser::<_, _, VerboseError<_>, ParseError>(preceded(
+            tag("3."),
+            separated_pair(
                 nom::character::complete::u8,
                 char('.'),
                 nom::character::complete::u8,
-            ))
-            .all_consuming()
-            .parse(ver)
-            .map(|(_, (_, ver))| ver)
-            .map_err(Into::into)
+            ),
+        ))(ver)
+        .map_err(Into::into)
     }
 
-    fn parse_sequence_region(seq_region: &str) -> TXaseResult<(&str, Range<u64>)> {
+    fn parse_sequence_region(seq_region: &str) -> Result<(&str, Range<u64>), GffError> {
         const VALID: &str =
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%>";
-        separated_pair(
-            is_a(VALID).verify(|&id: &&str| !id.starts_with('>')),
-            char(' '),
+        final_parser::<_, _, VerboseError<&str>, ParseError>(map(
             separated_pair(
-                nom::character::complete::u64,
+                is_a(VALID).verify(|&id: &&str| !id.starts_with('>')),
                 char(' '),
-                nom::character::complete::u64,
+                separated_pair(
+                    nom::character::complete::u64,
+                    char(' '),
+                    nom::character::complete::u64,
+                ),
             ),
-        )
-        .all_consuming()
-        .parse(seq_region)
+            |(seq_id, (start, end))| (seq_id, start..end),
+        ))(seq_region)
         .map_err(Into::into)
-        .map(|(_, (seq_id, (start, end)))| (seq_id, start..end))
     }
 }
