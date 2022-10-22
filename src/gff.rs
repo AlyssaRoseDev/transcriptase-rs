@@ -20,8 +20,6 @@ pub enum GffError {
     DuplicateSequence,
     #[error("Invalid Genome Build")]
     InvalidGenomeBuild,
-    #[error("Data bearing attribute had no data")]
-    NoData,
     #[error("{0}")]
     ParseError(#[from] parsers::ParseError),
     #[error("Failed to decode an escaped string")]

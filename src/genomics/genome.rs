@@ -1,8 +1,10 @@
 use super::nucleotide::{DNA, RNA};
 use crate::{err::TXaseError, fasta::Sequence};
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 use std::{
     fmt::Display,
+    iter::FromIterator,
     ops::{Index, IndexMut},
     str::FromStr,
 };
@@ -20,6 +22,24 @@ impl Sequence for DnaSeq {
 
     fn serialize_bytes(&self) -> &[u8] {
         todo!()
+    }
+
+    const VALID_CHARS: &'static str = "";
+}
+
+impl FromIterator<DNA> for DnaSeq {
+    fn from_iter<T: IntoIterator<Item = DNA>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl FromParallelIterator<DNA> for DnaSeq {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: IntoParallelIterator<Item = DNA>,
+    {
+        Self(par_iter.into_par_iter().collect())
     }
 }
 
@@ -94,6 +114,24 @@ impl Sequence for RnaSeq {
 
     fn serialize_bytes(&self) -> &[u8] {
         todo!()
+    }
+
+    const VALID_CHARS: &'static str = "";
+}
+
+impl FromIterator<RNA> for RnaSeq {
+    fn from_iter<T: IntoIterator<Item = RNA>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl FromParallelIterator<RNA> for RnaSeq {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: IntoParallelIterator<Item = RNA>,
+    {
+        Self(par_iter.into_par_iter().collect())
     }
 }
 

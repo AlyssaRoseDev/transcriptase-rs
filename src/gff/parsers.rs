@@ -8,13 +8,15 @@ use nom::{
     error::{VerboseError, VerboseErrorKind},
     number::complete::double,
     sequence::{terminated, tuple},
-    IResult, Parser,
+    Parser,
 };
 use nom_supreme::{
     final_parser::{final_parser, ExtractContext},
     ParserExt,
 };
 use thiserror::Error;
+
+use crate::NomResult;
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Gff Parsing Error: {msg}")]
@@ -47,8 +49,6 @@ impl ExtractContext<&str, ParseError> for VerboseError<&str> {
         }
     }
 }
-
-pub(crate) type NomResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
 pub(crate) const RESERVED: &str = "\t\r\n";
 

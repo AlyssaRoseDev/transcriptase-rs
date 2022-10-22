@@ -41,15 +41,6 @@ pub enum TXaseError {
     #[error("{0}")]
     InternalParseFailure(String),
 }
-
-type NomTreeErr<'a> = nom::Err<
-    nom_supreme::error::GenericErrorTree<
-        &'a str,
-        &'a str,
-        &'a str,
-        Box<dyn std::error::Error + Send + Sync>,
-    >,
->;
 impl From<nom::Err<nom::error::VerboseError<&str>>> for TXaseError {
     fn from(e: nom::Err<nom::error::VerboseError<&str>>) -> Self {
         Self::NomParsing(e.to_string())

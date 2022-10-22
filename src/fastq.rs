@@ -13,7 +13,11 @@ pub type Descriptor = String;
 pub type QualitySequence<T, Q> = Vec<(T, Q)>;
 
 #[derive(Debug)]
-pub struct FastQ<S: Sequence, Q: Quality> {
+pub struct FastQ<S, Q>
+where
+    S: Sequence,
+    Q: Quality,
+{
     pub sequences: HashMap<Descriptor, QualitySequence<S::Inner, Q>>,
 }
 

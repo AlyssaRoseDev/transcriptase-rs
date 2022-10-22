@@ -87,9 +87,9 @@ impl FromStr for DNA {
 }
 
 impl TryFrom<char> for DNA {
-    type Error = TXaseError;
+    type Error = String;
 
-    fn try_from(value: char) -> Result<Self, TXaseError> {
+    fn try_from(value: char) -> Result<Self, String> {
         Ok(match value {
             '0' => Self::Gap,
             'A' => Self::Adenine,
@@ -107,7 +107,7 @@ impl TryFrom<char> for DNA {
             'D' => Self::NotC,
             'B' => Self::NotA,
             'N' => Self::Any,
-            _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
+            _ => return Err(format!("Expected one of ['0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'], got {value}")),
         })
     }
 }
@@ -232,7 +232,7 @@ impl FromStr for RNA {
 }
 
 impl TryFrom<char> for RNA {
-    type Error = TXaseError;
+    type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -252,7 +252,7 @@ impl TryFrom<char> for RNA {
             'D' => Self::NotC,
             'B' => Self::NotA,
             'N' => Self::Any,
-            _ => return Err(TXaseError::InvalidNucleotide(String::from(value))),
+            _ => return Err(format!("Expected one of ['0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'U', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'], got {value}")),
         })
     }
 }

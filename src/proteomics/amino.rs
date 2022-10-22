@@ -138,7 +138,7 @@ impl FromStr for AminoAcid {
 }
 
 impl TryFrom<char> for AminoAcid {
-    type Error = TXaseError;
+    type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -165,10 +165,10 @@ impl TryFrom<char> for AminoAcid {
             'U' => Self::Selenocysteine,
             'O' => Self::Pyrrolysine,
             '*' => Self::Stop,
-            val => {
-                return Err(TXaseError::InternalParseFailure(format!(
-                    "Failed to parse {val} as an Amino Acid"
-                )))
+            _ => {
+                return Err(format!(
+                    "Expected one of ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V', 'U', 'O', '*'], got {value}"
+                ))
             }
         })
     }

@@ -1,8 +1,9 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
-use transcriptase::{err::TXaseResult, gff::GFF};
+use miette::Result;
+use transcriptase::gff::GFF;
 
-pub fn main() -> TXaseResult<()> {
+pub fn main() -> Result<()> {
     Registry::default()
         .with(
             tracing_tree::HierarchicalLayer::new(2)
