@@ -81,15 +81,14 @@ where
             if let Some(pos) = memchr::memchr2(b'>', b';', &this[1..]) {
                 let (ret, rem) = this.split_at(pos);
                 src = Some(rem);
-                Some(std::str::from_utf8(ret).expect("src was a valid str"))
+                Some(unsafe { std::str::from_utf8_unchecked(ret) })
             } else {
-                Some(
-                    std::str::from_utf8(
+                Some(unsafe {
+                    std::str::from_utf8_unchecked(
                         src.take()
                             .expect("early return protects us from take being None"),
                     )
-                    .expect("src was a valid str"),
-                )
+                })
             }
         })
         .map(|seq| {
@@ -121,15 +120,12 @@ where
             if let Some(pos) = memchr::memchr2(b'>', b';', &this[1..]) {
                 let (ret, rem) = this.split_at(pos);
                 src = Some(rem);
-                Some(std::str::from_utf8(ret).expect("src was a valid str"))
+                //SAFETY: `src` was originally valid UTF-8 when converted to an &[u8] by `as_bytes`
+                //and is only split in such a way that the resulting string is still valid UTF-8
+                Some(unsafe { std::str::from_utf8_unchecked(ret) })
             } else {
-                Some(
-                    std::str::from_utf8(
-                        src.take()
-                            .expect("early return protects us from take being None"),
-                    )
-                    .expect("src was a valid str"),
-                )
+                //SAFETY: Same as above
+                Some(unsafe { std::str::from_utf8_unchecked(this) })
             }
         })
         .collect::<Vec<_>>()
