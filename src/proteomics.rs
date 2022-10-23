@@ -42,7 +42,7 @@ impl Sequence for Proteome {
         todo!()
     }
 
-    const VALID_CHARS: &'static str = "";
+    const VALID_CHARS: &'static str = "ARNDCQEGHILKMFPSTWYVUO*";
 }
 
 impl FromIterator<AminoAcid> for Proteome {

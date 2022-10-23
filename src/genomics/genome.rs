@@ -24,7 +24,7 @@ impl Sequence for DnaSeq {
         todo!()
     }
 
-    const VALID_CHARS: &'static str = "";
+    const VALID_CHARS: &'static str = "0ACMGRSVTWYHKDBN";
 }
 
 impl FromIterator<DNA> for DnaSeq {
@@ -116,7 +116,7 @@ impl Sequence for RnaSeq {
         todo!()
     }
 
-    const VALID_CHARS: &'static str = "";
+    const VALID_CHARS: &'static str = "0ACMGRSVUWYHKDBN";
 }
 
 impl FromIterator<RNA> for RnaSeq {

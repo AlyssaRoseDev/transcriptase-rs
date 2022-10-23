@@ -2,13 +2,15 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use nom::{
     bytes::complete::is_a,
     character::complete::{line_ending, multispace0, not_line_ending, one_of},
-    combinator::{all_consuming, map, opt},
     error::{VerboseError, VerboseErrorKind},
     multi::many1,
-    sequence::{delimited, pair, terminated},
+    sequence::{delimited, pair},
     Parser,
 };
-use nom_supreme::final_parser::{final_parser, ExtractContext};
+use nom_supreme::{
+    final_parser::{final_parser, ExtractContext},
+    ParserExt,
+};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 use std::{iter::FromIterator, ops::Index};
@@ -144,18 +146,17 @@ where
 }
 
 fn comment_line(src: &str) -> NomResult<'_, Option<Box<str>>> {
-    map(
-        opt(delimited(one_of(">;"), not_line_ending, line_ending)),
-        |s| s.map(Into::into),
-    )
-    .parse(src)
+    delimited(one_of(">;"), not_line_ending, line_ending)
+        .opt()
+        .map(|s| s.map(Into::into))
+        .parse(src)
 }
 
 fn sequence_line<T>(src: &str) -> NomResult<'_, &str>
 where
     T: Sequence,
 {
-    terminated(is_a(T::VALID_CHARS), multispace0).parse(src)
+    is_a(T::VALID_CHARS).terminated(multispace0).parse(src)
 }
 
 #[cfg(not(feature = "rayon"))]
@@ -163,17 +164,20 @@ fn sequence_block<T>(src: &str) -> NomResult<'_, T>
 where
     T: Sequence,
 {
-    map(all_consuming(many1(sequence_line::<T>)), |lines| {
-        lines
-            .iter()
-            .flat_map(|s| s.chars())
-            .map(|c| {
-                T::Inner::try_from(c)
-                    .expect("parser prevents us from reaching here with invalid characters")
-            })
-            .collect::<T>()
-    })
-    .parse(src)
+    many1(sequence_line::<T>)
+        .all_consuming()
+        .map(|lines| {
+            lines
+                .iter()
+                .flat_map(|s| {
+                    s.chars().map(|c| {
+                        T::Inner::try_from(c)
+                            .expect("parser prevents us from reaching here with invalid characters")
+                    })
+                })
+                .collect::<T>()
+        })
+        .parse(src)
 }
 
 #[cfg(feature = "rayon")]
@@ -181,17 +185,20 @@ fn sequence_block<T>(src: &str) -> NomResult<'_, T>
 where
     T: Sequence,
 {
-    map(all_consuming(many1(sequence_line::<T>)), |lines| {
-        lines
-            .par_iter()
-            .flat_map(|s| s.par_chars())
-            .map(|c| {
-                T::Inner::try_from(c)
-                    .expect("parser prevents us from reaching here with invalid characters")
-            })
-            .collect::<T>()
-    })
-    .parse(src)
+    many1(sequence_line::<T>)
+        .all_consuming()
+        .map(|lines| {
+            lines
+                .par_iter()
+                .flat_map(|s| {
+                    s.par_chars().map(|c| {
+                        T::Inner::try_from(c)
+                            .expect("parser prevents us from reaching here with invalid characters")
+                    })
+                })
+                .collect::<T>()
+        })
+        .parse(src)
 }
 
 #[cfg(not(feature = "rayon"))]
