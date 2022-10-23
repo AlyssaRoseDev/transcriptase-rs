@@ -32,9 +32,9 @@ where
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("{msg}")]
+#[error("FASTA Parsing Error: {msg}")]
 pub struct FastaError {
-    msg: String,
+    msg: Box<str>,
     #[source_code]
     src: NamedSource,
     #[label("Here")]
@@ -53,7 +53,7 @@ impl ExtractContext<&str, FastaError> for VerboseError<&str> {
             "Unknown Error Kind; This is a bug and should be reported!"
         };
         FastaError {
-            msg: reason.to_string(),
+            msg: reason.into(),
             src: NamedSource::new(reason, original_input.to_string()),
             err_loc: original_input
                 .find(fail)

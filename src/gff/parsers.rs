@@ -21,7 +21,7 @@ use crate::NomResult;
 #[derive(Debug, Error, Diagnostic)]
 #[error("Gff Parsing Error: {msg}")]
 pub struct ParseError {
-    msg: String,
+    msg: Box<str>,
     #[source_code]
     src: NamedSource,
     #[label("Here")]
@@ -40,7 +40,7 @@ impl ExtractContext<&str, ParseError> for VerboseError<&str> {
             "Unknown Error Kind; This is a bug and should be reported!"
         };
         ParseError {
-            msg: reason.to_string(),
+            msg: reason.into(),
             src: NamedSource::new(reason, original_input.to_string()),
             err_loc: original_input
                 .find(fail)
