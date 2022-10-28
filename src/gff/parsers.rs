@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_a, is_not, tag},
     character::complete::{char, digit1, one_of},
-    combinator::{map, map_res},
+    combinator::{map, map_res, value},
     error::{VerboseError, VerboseErrorKind},
     number::complete::double,
     sequence::{terminated, tuple},
@@ -80,14 +80,14 @@ pub(crate) fn range_bound(src: &str) -> NomResult<'_, usize> {
 }
 
 pub(crate) fn score(src: &str) -> NomResult<'_, Option<f64>> {
-    alt((map(char('.'), |_| None), map(double, Some)))
+    alt((value(None, char('.')), map(double, Some)))
         .context("Invalid score, expected one of '.' or a valid floating point number")
         .parse(src)
 }
 
 pub(crate) fn strand(src: &str) -> NomResult<'_, Option<char>> {
     const VALID: &str = "+-?";
-    alt((map(char('.'), |_| None), map(one_of(VALID), Some)))
+    alt((value(None, char('.')), map(one_of(VALID), Some)))
         .context("Invalid strand, expected one of ['.', '+', '-', '?']")
         .parse(src)
 }
@@ -95,7 +95,7 @@ pub(crate) fn strand(src: &str) -> NomResult<'_, Option<char>> {
 pub(crate) fn phase(src: &str) -> NomResult<'_, Option<u8>> {
     const VALID: &str = "012";
     alt((
-        map(char('.'), |_| None),
+        value(None, char('.')),
         map(one_of(VALID), |d| {
             Some(
                 d.to_digit(10)
