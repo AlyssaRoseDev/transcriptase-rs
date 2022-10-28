@@ -6,13 +6,13 @@ use std::{
 use super::{GffError, UnescapedString};
 use crate::gff::parsers::ParseError;
 use nom::{
-    bytes::complete::{is_a, tag},
+    bytes::complete::is_a,
     character::complete::char,
     combinator::map,
     error::VerboseError,
     sequence::{preceded, separated_pair},
 };
-use nom_supreme::{final_parser::final_parser, ParserExt};
+use nom_supreme::{final_parser::final_parser, tag::complete::tag, ParserExt};
 
 #[derive(Debug, Clone, Default)]
 pub struct Metadata {

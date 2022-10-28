@@ -1,16 +1,70 @@
 use std::collections::HashMap;
 
-use crate::err::{TXaseError, TXaseResult};
 use crate::fasta::Sequence;
+use crate::NomResult;
+use miette::{Diagnostic, NamedSource, SourceSpan};
+use nom::character::complete::multispace0;
+use nom::combinator::eof;
+use nom::error::{VerboseError, VerboseErrorKind};
+use nom::multi::many1;
+use nom::sequence::{delimited, tuple};
+use nom::Parser;
+use nom_supreme::final_parser::{final_parser, ExtractContext};
+use nom_supreme::ParserExt;
 use quality::Quality;
 pub use quality::{Phred, Solexa};
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
+use thiserror::Error;
+use tracing::trace;
 
 pub mod quality;
 
 pub type Descriptor = String;
 pub type QualitySequence<T, Q> = Vec<(T, Q)>;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum FastQError {
+    #[error("Descriptions of FastQ file did not match!")]
+    MismatchedDescription,
+    #[error("File contained no FastQ data")]
+    EmptyFile,
+    #[error("{msg}")]
+    ParsingError {
+        msg: Box<str>,
+        #[source_code]
+        src: NamedSource,
+        #[label("Here")]
+        err_loc: SourceSpan,
+    },
+}
+
+impl ExtractContext<&str, FastQError> for VerboseError<&str> {
+    fn extract_context(self, original_input: &str) -> FastQError {
+        let (fail, kind) = &self.errors[0];
+        let ctx = &self.errors.get(1);
+        let reason = if let Some((_, ctx_err)) = ctx {
+            if let VerboseErrorKind::Context(ctx_msg) = ctx_err {
+                ctx_msg
+            } else {
+                unreachable!()
+            }
+        } else if let VerboseErrorKind::Nom(e) = kind {
+            e.description()
+        } else {
+            "Unknown Error Kind; This is a bug and should be reported!"
+        };
+        trace!(fail);
+        let err_loc = original_input
+            .find(fail)
+            .expect("This error came from finding 'fail' in 'original_input'");
+        FastQError::ParsingError {
+            msg: reason.into(),
+            src: NamedSource::new(reason, original_input.to_string()),
+            err_loc: err_loc.into(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct FastQ<S, Q>
@@ -26,37 +80,56 @@ impl<S, Q> FastQ<S, Q>
 where
     S: Sequence,
     Q: Quality,
-    TXaseError: From<<Q as TryFrom<char>>::Error>,
-    TXaseError: From<<S::Inner as TryFrom<char>>::Error>,
 {
     #[tracing::instrument(skip_all)]
-    pub fn parse(src: &str) -> TXaseResult<Self> {
-        let mut lines = src.lines();
+    pub fn parse(src: &str) -> Result<Self, FastQError> {
+        let mut src = Some(src.as_bytes());
         let sequences = std::iter::from_fn(move || {
-            Some([lines.next()?, lines.next()?, lines.next()?, lines.next()?])
+            let this = src?;
+            if let Some(pos) = memchr::memchr(b'@', &this[1..]) {
+                let (ret, rem) = this.split_at(pos);
+                src = Some(rem);
+                Some(unsafe { std::str::from_utf8_unchecked(ret) })
+            } else {
+                Some(unsafe {
+                    std::str::from_utf8_unchecked(
+                        src.take()
+                            .expect("early return protects us from take being None"),
+                    )
+                })
+            }
         })
         .map(Self::parse_single)
-        .collect::<Result<HashMap<Descriptor, QualitySequence<S::Inner, Q>>, TXaseError>>()?;
+        .collect::<Result<_, FastQError>>()?;
         Ok(Self { sequences })
     }
 
-    fn parse_single(set: [&str; 4]) -> TXaseResult<(Descriptor, QualitySequence<S::Inner, Q>)> {
-        let desc = parsers::desc_line(set[0], "@")?.ok_or_else(|| {
-            TXaseError::InternalParseFailure(
-                "First description line must not be empty!".to_string(),
-            )
-        })?;
-        match parsers::desc_line(set[2], "+")? {
-            Some(s) if s != desc => Err(TXaseError::InternalParseFailure(format!("Line three contained a description that did not match the original description!\nExpected: {desc}, Got: {s}"))),
+    fn parse_single(set: &str) -> Result<(Descriptor, QualitySequence<S::Inner, Q>), FastQError> {
+        let (desc, seq_line, desc2, qual_line) = final_parser(tuple((
+            parsers::desc_line,
+            parsers::sequence_line::<S>,
+            parsers::optional_desc_line,
+            parsers::quality_line::<Q>,
+        )))(set)?;
+        match desc2 {
+            Some(s) if s != desc => Err(FastQError::MismatchedDescription),
             _ => Ok((
                 desc.to_string(),
-                set[1]
-                .chars()
-                .zip(set[3].chars())
-                .map(|(s, q)| -> TXaseResult<_> {
-                    Ok((S::Inner::try_from(s)?, Q::try_from(q)?))
-                })
-                .collect::<TXaseResult<_>>()?))
+                seq_line
+                    .bytes()
+                    .zip(qual_line.bytes())
+                    .map(|(s, q)| {
+                        (
+                            S::Inner::try_from(char::from(s)).expect(
+                                "Parser prevents us from reaching here with invalid characters",
+                            ),
+                            Q::try_from(char::from(q)).expect(
+                                "Parser prevents us from reaching here with invalid characters",
+                            ),
+                        )
+                    })
+                    .collect::<_>(),
+            )),
         }
     }
 }
@@ -67,62 +140,98 @@ where
     S: Sequence,
     Q: Quality + Send,
     S::Inner: Send,
-    <S::Inner as TryFrom<char>>::Error: Send,
-    <Q as TryFrom<char>>::Error: Send,
-    TXaseError: From<<Q as TryFrom<char>>::Error>,
-    TXaseError: From<<S::Inner as TryFrom<char>>::Error>,
 {
     #[tracing::instrument(skip_all)]
-    pub fn parse(src: &str) -> TXaseResult<Self> {
-        let mut lines = src.lines();
-        let sequences = std::iter::from_fn(|| {
-            Some([lines.next()?, lines.next()?, lines.next()?, lines.next()?])
-        })
-        .collect::<Vec<_>>()
+    pub fn parse(src: &str) -> Result<Self, FastQError> {
+        let sequences = final_parser(
+            delimited(multispace0, many1(Self::parse_single), multispace0)
+                .context("FastQ files must contain at least one entry"),
+        )(src)?
         .into_par_iter()
-        .map(Self::parse_single)
-        .collect::<Result<HashMap<Descriptor, QualitySequence<S::Inner, Q>>, TXaseError>>()?;
+        .collect::<_>();
         Ok(Self { sequences })
     }
 
-    fn parse_single(set: [&str; 4]) -> TXaseResult<(Descriptor, QualitySequence<S::Inner, Q>)> {
-        let desc = parsers::desc_line(set[0], "@")?.ok_or_else(|| {
-            TXaseError::InternalParseFailure(
-                "First description line must not be empty!".to_string(),
+    //#[tracing::instrument(skip_all)]
+    fn parse_single(src: &str) -> NomResult<'_, (Descriptor, QualitySequence<S::Inner, Q>)> {
+        tuple((
+            parsers::desc_line,
+            parsers::sequence_line::<S>,
+            parsers::optional_desc_line,
+            parsers::quality_line::<Q>,
+        ))
+        .context("Incomplete FastQ block")
+        .verify(|(desc, _, desc2, _)| {
+            if let Some(desc2) = desc2 {
+                desc2.is_empty() || desc == desc2
+            } else {
+                true
+            }
+        })
+        .context(
+            "FastQ entries must have matching descriptions if the second description is non-empty",
+        )
+        .map(|(desc, seq_line, _, qual_line)| {
+            (
+                desc.to_string(),
+                seq_line
+                    .as_bytes()
+                    .into_par_iter()
+                    .zip(qual_line.as_bytes().into_par_iter())
+                    .map(|(&s, &q)| {
+                        (
+                            S::Inner::try_from(char::from(s)).expect(
+                                "Parser prevents us from reaching here with invalid characters",
+                            ),
+                            Q::try_from(char::from(q)).expect(
+                                "Parser prevents us from reaching here with invalid characters",
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
             )
-        })?;
-        match parsers::desc_line(set[2], "+")? {
-                        Some(s) if s != desc => Err(TXaseError::InternalParseFailure(format!("Line three contained a description that did not match the original description!\nExpected: {desc:?}, Got: {s:?}"))),
-                        _ => Ok((
-                            desc.to_string(),
-                            set[1]
-                                .as_bytes()
-                                .into_par_iter()
-                                .zip(set[3].as_bytes().into_par_iter())
-                                .map(|(s, q)| -> TXaseResult<_> {
-                               Ok((
-                                    S::Inner::try_from(char::from(*s))?,
-                                    Q::try_from(char::from(*q))?,
-                                ))
-                                })
-                                .collect::<TXaseResult<_>>()?,
-                        )),
-                    }
+        })
+        .parse(src)
     }
 }
 
 mod parsers {
-    use nom::{bytes::complete::tag, Parser};
+    use nom::{
+        bytes::complete::{is_a, take_while},
+        character::complete::{line_ending, not_line_ending},
+        combinator::opt,
+        sequence::delimited,
+        Parser,
+    };
+    use nom_supreme::{tag::complete::tag, ParserExt};
 
-    use crate::err::TXaseResult;
+    use crate::{fasta::Sequence, NomResult};
 
-    pub fn desc_line<'src>(
-        src: &'src str,
-        desc_tag: &'static str,
-    ) -> TXaseResult<Option<&'src str>> {
-        tag(desc_tag)
+    use super::quality::Quality;
+
+    pub fn desc_line(src: &str) -> NomResult<'_, &str> {
+        delimited(tag("@"), not_line_ending, line_ending)
+            .context("First description line was malformed")
             .parse(src)
-            .map(|(desc, _)| if desc.is_empty() { None } else { Some(desc) })
-            .map_err(Into::into)
+    }
+
+    pub fn sequence_line<T: Sequence>(src: &str) -> NomResult<'_, &str> {
+        is_a(T::VALID_CHARS)
+            .terminated(line_ending)
+            .context("Sequence line contained invalid characters")
+            .parse(src)
+    }
+
+    pub fn optional_desc_line(src: &str) -> NomResult<'_, Option<&str>> {
+        delimited(tag("+"), opt(not_line_ending), line_ending)
+            .context("Second description line was malformed")
+            .parse(src)
+    }
+
+    pub fn quality_line<Q: Quality>(src: &str) -> NomResult<'_, &str> {
+        take_while(Q::is_valid)
+            .terminated(line_ending)
+            .context("Quality line contained invalid characters")
+            .parse(src)
     }
 }

@@ -18,19 +18,6 @@ use thiserror::Error;
 
 use crate::NomResult;
 
-/// [`Fasta`] is a simple text-based format for genomic and proteomic sequences that stores an optional
-/// description and a sequence of [`RNA`](crate::genomics::nucleotide::RNA), [`DNA`](crate::genomics::nucleotide::DNA), or [`Amino Acids`](crate::proteomics::amino::AminoAcid).
-#[derive(Debug, Clone)]
-pub struct Fasta<T>
-where
-    T: Sequence,
-{
-    /// The description given in the inital comment line
-    pub description: Option<Box<str>>,
-    /// The genomic or proteomic sequence
-    pub sequence: T,
-}
-
 #[derive(Debug, Error, Diagnostic)]
 #[error("FASTA Parsing Error: {msg}")]
 pub struct FastaError {
@@ -61,6 +48,19 @@ impl ExtractContext<&str, FastaError> for VerboseError<&str> {
                 .into(),
         }
     }
+}
+
+/// [`Fasta`] is a simple text-based format for genomic and proteomic sequences that stores an optional
+/// description and a sequence of [`RNA`](crate::genomics::nucleotide::RNA), [`DNA`](crate::genomics::nucleotide::DNA), or [`Amino Acids`](crate::proteomics::amino::AminoAcid).
+#[derive(Debug, Clone)]
+pub struct Fasta<T>
+where
+    T: Sequence,
+{
+    /// The description given in the inital comment line
+    pub description: Option<Box<str>>,
+    /// The genomic or proteomic sequence
+    pub sequence: T,
 }
 
 impl<T> Fasta<T>
@@ -114,10 +114,13 @@ where
     /// parse implementation returns an error
     #[cfg(feature = "rayon")]
     pub fn parse(src: &str) -> Result<Vec<Self>, FastaError> {
+        use tracing::trace;
+
         let mut src = Some(src.as_bytes());
         std::iter::from_fn(move || {
             let this = src?;
             if let Some(pos) = memchr::memchr2(b'>', b';', &this[1..]) {
+                trace!("Found FASTA block at {pos}");
                 let (ret, rem) = this.split_at(pos);
                 src = Some(rem);
                 //SAFETY: `src` was originally valid UTF-8 when converted to an &[u8] by `as_bytes`
@@ -125,13 +128,20 @@ where
                 Some(unsafe { std::str::from_utf8_unchecked(ret) })
             } else {
                 //SAFETY: Same as above
-                Some(unsafe { std::str::from_utf8_unchecked(this) })
+                trace!("Yielding last FASTA block");
+                Some(unsafe {
+                    std::str::from_utf8_unchecked(
+                        src.take()
+                            .expect("early return prevents take from being None"),
+                    )
+                })
             }
         })
         .collect::<Vec<_>>()
         .into_par_iter()
         .map(|seq| {
             let (description, sequence) = final_parser(pair(comment_line, sequence_block))(seq)?;
+            trace!("Successfully parsed a FASTA block");
             Ok(Self {
                 description,
                 sequence,
@@ -152,7 +162,10 @@ fn sequence_line<T>(src: &str) -> NomResult<'_, &str>
 where
     T: Sequence,
 {
-    is_a(T::VALID_CHARS).terminated(multispace0).parse(src)
+    is_a(T::VALID_CHARS)
+        .terminated(multispace0)
+        .context("Sequence Line contained invalid character")
+        .parse(src)
 }
 
 #[cfg(not(feature = "rayon"))]
@@ -173,6 +186,7 @@ where
                 })
                 .collect::<T>()
         })
+        .context("Failed to parse sequence block")
         .parse(src)
 }
 
@@ -194,6 +208,7 @@ where
                 })
                 .collect::<T>()
         })
+        .context("Failed to parse sequence block")
         .parse(src)
 }
 

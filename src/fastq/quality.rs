@@ -1,7 +1,18 @@
-use crate::err::TXaseError;
-
 /// Defines the requirements for an ASCII character encoded quality score for FastQ files
-pub trait Quality: From<f64> + Into<f64> + TryFrom<char> + Into<char> {}
+pub trait Quality: From<f64> + Into<f64> + TryFrom<char, Error = String> + Into<char> {
+    fn is_valid(c: char) -> bool {
+        ('!'..='~').contains(&c)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn contains() {
+    for c in r##"!"#$%&'()*+,./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~`-"##.chars() {
+        assert!(Phred::is_valid(c));
+        assert!(Solexa::is_valid(c));
+    }
+}
 
 /// A Phred quality score, encoded by the formula `-10 * log10(P)` for a probability `P`
 #[derive(Debug)]
@@ -20,14 +31,14 @@ impl From<f64> for Phred {
 }
 
 impl TryFrom<char> for Phred {
-    type Error = TXaseError;
+    type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         let byte = value as u8;
         if !(0x21..=0x7e).contains(&byte) {
-            Err(TXaseError::InternalParseFailure(format!(
-                r#"Phred quality character must be between '!' (0x21) and '~' (0x7e), got {value} ({byte:x})"#
-            )))
+            Err(format!(
+                "Phred quality character must be between '!' (0x21) and '~' (0x7e), got {value} ({byte:x})"
+            ))
         } else {
             Ok(Self(byte - 0x21))
         }
@@ -61,14 +72,14 @@ impl From<f64> for Solexa {
 }
 
 impl TryFrom<char> for Solexa {
-    type Error = TXaseError;
+    type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         let byte = value as u8;
         if !(0x21..=0x7e).contains(&byte) {
-            Err(TXaseError::InternalParseFailure(format!(
+            Err(format!(
                 r#"Solexa quality character must be between '!' (0x21) and '~' (0x7e), got {value} ({byte:x})"#
-            )))
+            ))
         } else {
             Ok(Self(byte))
         }
