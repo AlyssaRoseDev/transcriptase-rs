@@ -1,11 +1,13 @@
 use std::{borrow::Borrow, fmt};
 
-use crate::{
-    err::{TXaseError, TXaseResult},
-    gff::{parsers::strand, Strand},
+use nom_supreme::final_parser::final_parser;
+
+use crate::gff::{
+    parsers::{strand, ParseError},
+    Strand,
 };
 
-use super::UnescapedString;
+use super::{GffError, UnescapedString};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct AttributeSet {
@@ -39,15 +41,11 @@ impl fmt::Display for TargetAttr {
 
 impl AttributeSet {
     #[tracing::instrument]
-    pub(crate) fn parse(src: &str) -> TXaseResult<Self> {
+    pub(crate) fn parse(src: &str) -> Result<Self, GffError> {
         let mut attrs = AttributeSet::default();
-        let attr_iter = src.split(';').flat_map(|attr| {
-            attr.split_once('=').ok_or_else(|| {
-                TXaseError::InvalidAttribute(format!(
-                    "Invalid attribute, expected tag=value, got {src}"
-                ))
-            })
-        });
+        let attr_iter = src
+            .split(';')
+            .flat_map(|attr| attr.split_once('=').ok_or(GffError::MalformedLine));
         for (tag, value) in attr_iter {
             match tag {
                 "ID" => attrs.id = Some(Id::new(value)),
@@ -56,16 +54,45 @@ impl AttributeSet {
                 "Parent" => attrs.parent = Some(value.split(',').map(Id::new).collect()),
                 "Target" => {
                     let mut parts = value.split(' ');
-                    let target_id = Id::new(parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Target_Id ({src}={value})")))?);
-                    let start = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing Start ({src}={value})")))?.parse()?;
-                    let end = parts.next().ok_or_else(|| TXaseError::InvalidAttribute(format!("Unexpected end of Target Attribute, missing End ({src}={value})")))?.parse()?;
-                    let strand = parts.next().map(|st| strand(st).map(|(_, strand)| strand)).transpose()?.flatten().map(Strand::parse).transpose()?;
-                    attrs.target = Some(TargetAttr { target_id, start, end, strand })
-                },
-                "Gap" => attrs.gap = Some(value.split(' ').map(|gap| {
-                    let (kind, len) = gap.split_at(0);
-                    Ok((GapKind::parse(kind)?, len.parse::<usize>()?))
-                }).collect::<TXaseResult<Vec<_>>>()?),
+                    let target_id = Id::new(parts.next().ok_or(GffError::InvalidAttribute)?);
+                    let start = parts
+                        .next()
+                        .ok_or(GffError::MalformedTarget)?
+                        .parse()
+                        .map_err(|_| GffError::FromStrErr)?;
+                    let end = parts
+                        .next()
+                        .ok_or(GffError::MalformedTarget)?
+                        .parse()
+                        .map_err(|_| GffError::FromStrErr)?;
+                    let strand = parts
+                        .next()
+                        .map(final_parser::<_, _, _, ParseError>(strand))
+                        .transpose()?
+                        .flatten()
+                        .map(Strand::parse)
+                        .transpose()?;
+                    attrs.target = Some(TargetAttr {
+                        target_id,
+                        start,
+                        end,
+                        strand,
+                    })
+                }
+                "Gap" => {
+                    attrs.gap = Some(
+                        value
+                            .split(' ')
+                            .map(|gap| {
+                                let (kind, len) = gap.split_at(0);
+                                Ok((
+                                    GapKind::parse(kind)?,
+                                    len.parse::<usize>().map_err(|_| GffError::FromStrErr)?,
+                                ))
+                            })
+                            .collect::<Result<Vec<_>, GffError>>()?,
+                    )
+                }
                 "Derives_from" => attrs.derives_from = Some(Id::new(value)),
                 "Note" => attrs.note = Some(UnescapedString::new(value)?),
                 "Dbxref" => attrs.dbx_ref = Some(UnescapedString::new(value)?),
@@ -73,10 +100,20 @@ impl AttributeSet {
                 "Is_circular" => match value {
                     "true" => attrs.is_circular = Some(true),
                     "false" => attrs.is_circular = Some(false),
-                    val => return Err(TXaseError::InvalidAttribute(format!("Invalid Is_circular attribute expected one of ['true', 'false'], got: {val}")))
+                    _ => return Err(GffError::IsCircularNotBool),
                 },
-                tag if tag.chars().next().ok_or_else(|| TXaseError::InvalidAttribute(String::from("Got empty Attribute Tag")))?.is_ascii_uppercase() => return Err(TXaseError::InvalidAttribute(format!("Attribute tags that start with an uppercase letter must match one of the official attributes, got {tag}"))),
-                tag => attrs.other.get_or_insert(Vec::new()).push((tag.into(), UnescapedString::new(value)?)),
+                tag if tag
+                    .chars()
+                    .next()
+                    .ok_or(GffError::MalformedLine)?
+                    .is_ascii_uppercase() =>
+                {
+                    return Err(GffError::ReservedAttribute)
+                }
+                tag => attrs
+                    .other
+                    .get_or_insert(Vec::new())
+                    .push((tag.into(), UnescapedString::new(value)?)),
             }
         }
         tracing::debug!("{}", attrs);
@@ -181,18 +218,14 @@ impl fmt::Display for GapKind {
 
 impl GapKind {
     #[tracing::instrument]
-    pub fn parse(src: &str) -> TXaseResult<Self> {
+    pub fn parse(src: &str) -> Result<Self, GffError> {
         Ok(match src {
             "M" => Self::Match,
             "I" => Self::Insert,
             "D" => Self::Delete,
             "F" => Self::FwdFrameShift,
             "R" => Self::RevFrameShift,
-            _ => {
-                return Err(TXaseError::InvalidAttribute(format!(
-                    "Invalid Gap Kind, expected one of ['M', 'I', 'D', 'F', 'R'], got: {src}"
-                )))
-            }
+            _ => return Err(GffError::InvalidGapKind),
         })
     }
 }

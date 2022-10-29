@@ -1,10 +1,11 @@
 use super::nucleotide::{DNA, RNA};
-use crate::{err::TXaseError, fasta::Sequence};
+use crate::fasta::Sequence;
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 use std::{
     fmt::Display,
+    iter::FromIterator,
     ops::{Index, IndexMut},
-    str::FromStr,
 };
 
 /// A sequence of [`DNA`] nucleotides
@@ -21,6 +22,24 @@ impl Sequence for DnaSeq {
     fn serialize_bytes(&self) -> &[u8] {
         todo!()
     }
+
+    const VALID_CHARS: &'static str = "0ACMGRSVTWYHKDBN";
+}
+
+impl FromIterator<DNA> for DnaSeq {
+    fn from_iter<T: IntoIterator<Item = DNA>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl FromParallelIterator<DNA> for DnaSeq {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: IntoParallelIterator<Item = DNA>,
+    {
+        Self(par_iter.into_par_iter().collect())
+    }
 }
 
 impl Index<usize> for DnaSeq {
@@ -34,32 +53,6 @@ impl Index<usize> for DnaSeq {
 impl IndexMut<usize> for DnaSeq {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
-    }
-}
-
-#[cfg(feature = "rayon")]
-impl FromStr for DnaSeq {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.par_lines()
-                .flat_map(|line| line.par_chars().map(DNA::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
-    }
-}
-
-#[cfg(not(feature = "rayon"))]
-impl FromStr for DnaSeq {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.lines()
-                .flat_map(|line| line.chars().map(DNA::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
     }
 }
 
@@ -95,6 +88,24 @@ impl Sequence for RnaSeq {
     fn serialize_bytes(&self) -> &[u8] {
         todo!()
     }
+
+    const VALID_CHARS: &'static str = "0ACMGRSVUWYHKDBN";
+}
+
+impl FromIterator<RNA> for RnaSeq {
+    fn from_iter<T: IntoIterator<Item = RNA>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+#[cfg(feature = "rayon")]
+impl FromParallelIterator<RNA> for RnaSeq {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: IntoParallelIterator<Item = RNA>,
+    {
+        Self(par_iter.into_par_iter().collect())
+    }
 }
 
 impl Index<usize> for RnaSeq {
@@ -108,32 +119,6 @@ impl Index<usize> for RnaSeq {
 impl IndexMut<usize> for RnaSeq {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
-    }
-}
-
-#[cfg(feature = "rayon")]
-impl FromStr for RnaSeq {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.par_lines()
-                .flat_map(|line| line.par_chars().map(RNA::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
-    }
-}
-
-#[cfg(not(feature = "rayon"))]
-impl FromStr for RnaSeq {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.lines()
-                .flat_map(|line| line.chars().map(RNA::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
     }
 }
 

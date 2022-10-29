@@ -1,5 +1,6 @@
 use std::io::Read;
 
+use miette::Result;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 use transcriptase::{
@@ -7,7 +8,7 @@ use transcriptase::{
     genomics::genome::DnaSeq,
 };
 
-fn main() {
+fn main() -> Result<()> {
     Registry::default()
         .with(
             tracing_tree::HierarchicalLayer::new(2)
@@ -24,5 +25,6 @@ fn main() {
         .unwrap()
         .read_to_string(&mut sra_data)
         .unwrap();
-    let _: FastQ<DnaSeq, Phred> = FastQ::parse(&sra_data).unwrap();
+    let _: FastQ<DnaSeq, Phred> = FastQ::parse(&sra_data)?;
+    Ok(())
 }

@@ -1,12 +1,13 @@
 use std::{
     fmt::Display,
+    iter::FromIterator,
     ops::{Index, IndexMut},
-    str::FromStr,
 };
 
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-use crate::{err::TXaseError, fasta::Sequence};
+use crate::fasta::Sequence;
 
 use self::amino::AminoAcid;
 
@@ -39,31 +40,23 @@ impl Sequence for Proteome {
     fn serialize_bytes(&self) -> &[u8] {
         todo!()
     }
+
+    const VALID_CHARS: &'static str = "ARNDCQEGHILKMFPSTWYVUO*";
 }
 
-#[cfg(feature = "rayon")]
-impl FromStr for Proteome {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.par_lines()
-                .flat_map(|line| line.par_chars().map(AminoAcid::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
+impl FromIterator<AminoAcid> for Proteome {
+    fn from_iter<T: IntoIterator<Item = AminoAcid>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
     }
 }
 
-#[cfg(not(feature = "rayon"))]
-impl FromStr for Proteome {
-    type Err = TXaseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.lines()
-                .flat_map(|line| line.chars().map(AminoAcid::try_from))
-                .collect::<Result<_, _>>()?,
-        ))
+#[cfg(feature = "rayon")]
+impl rayon::prelude::FromParallelIterator<AminoAcid> for Proteome {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: IntoParallelIterator<Item = AminoAcid>,
+    {
+        Self(par_iter.into_par_iter().collect())
     }
 }
 
