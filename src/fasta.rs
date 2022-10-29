@@ -73,7 +73,6 @@ where
     ///
     /// This function will return an error if the [`Sequence`]
     /// parse implementation returns an error
-    #[cfg(feature = "rayon")]
     pub fn parse(src: &str) -> Result<Vec<Self>, FastaError> {
         use tracing::trace;
 

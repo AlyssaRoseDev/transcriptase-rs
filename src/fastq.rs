@@ -4,7 +4,6 @@ use crate::fasta::Sequence;
 use crate::NomResult;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use nom::character::complete::multispace0;
-use nom::combinator::eof;
 use nom::error::{VerboseError, VerboseErrorKind};
 use nom::multi::many1;
 use nom::sequence::{delimited, tuple};
@@ -83,54 +82,53 @@ where
 {
     #[tracing::instrument(skip_all)]
     pub fn parse(src: &str) -> Result<Self, FastQError> {
-        let mut src = Some(src.as_bytes());
-        let sequences = std::iter::from_fn(move || {
-            let this = src?;
-            if let Some(pos) = memchr::memchr(b'@', &this[1..]) {
-                let (ret, rem) = this.split_at(pos);
-                src = Some(rem);
-                Some(unsafe { std::str::from_utf8_unchecked(ret) })
-            } else {
-                Some(unsafe {
-                    std::str::from_utf8_unchecked(
-                        src.take()
-                            .expect("early return protects us from take being None"),
-                    )
-                })
-            }
-        })
-        .map(Self::parse_single)
-        .collect::<Result<_, FastQError>>()?;
+        let sequences = final_parser(
+            delimited(multispace0, many1(Self::parse_single), multispace0)
+                .context("FastQ files must contain at least one entry"),
+        )(src)?
+        .into_iter()
+        .collect::<_>();
         Ok(Self { sequences })
     }
 
-    fn parse_single(set: &str) -> Result<(Descriptor, QualitySequence<S::Inner, Q>), FastQError> {
-        let (desc, seq_line, desc2, qual_line) = final_parser(tuple((
+    fn parse_single(src: &str) -> NomResult<'_, (Descriptor, QualitySequence<S::Inner, Q>)> {
+        tuple((
             parsers::desc_line,
             parsers::sequence_line::<S>,
             parsers::optional_desc_line,
             parsers::quality_line::<Q>,
-        )))(set)?;
-        match desc2 {
-            Some(s) if s != desc => Err(FastQError::MismatchedDescription),
-            _ => Ok((
+        ))
+        .context("Incomplete FastQ block")
+        .verify(|(desc, _, desc2, _)| {
+            if let Some(desc2) = desc2 {
+                desc2.is_empty() || desc == desc2
+            } else {
+                true
+            }
+        })
+        .context(
+            "FastQ entries must have matching descriptions if the second description is non-empty",
+        )
+        .map(|(desc, seq_line, _, qual_line)| {
+            (
                 desc.to_string(),
                 seq_line
-                    .bytes()
-                    .zip(qual_line.bytes())
+                    .chars()
+                    .zip(qual_line.chars())
                     .map(|(s, q)| {
                         (
-                            S::Inner::try_from(char::from(s)).expect(
+                            S::Inner::try_from(s).expect(
                                 "Parser prevents us from reaching here with invalid characters",
                             ),
-                            Q::try_from(char::from(q)).expect(
+                            Q::try_from(q).expect(
                                 "Parser prevents us from reaching here with invalid characters",
                             ),
                         )
                     })
-                    .collect::<_>(),
-            )),
-        }
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .parse(src)
     }
 }
 

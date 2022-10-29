@@ -1,4 +1,3 @@
-#![allow(clippy::or_fun_call)]
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use nom::{
     branch::alt,
