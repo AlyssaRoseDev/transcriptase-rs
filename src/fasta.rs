@@ -73,81 +73,19 @@ where
     ///
     /// This function will return an error if the [`Sequence`]
     /// parse implementation returns an error
-    #[cfg(not(feature = "rayon"))]
-    pub fn parse(src: &str) -> Result<Vec<Self>, ()> {
-        let mut src = Some(src.as_bytes());
-        std::iter::from_fn(move || {
-            let this = src?;
-            if let Some(pos) = memchr::memchr2(b'>', b';', &this[1..]) {
-                let (ret, rem) = this.split_at(pos);
-                src = Some(rem);
-                Some(unsafe { std::str::from_utf8_unchecked(ret) })
-            } else {
-                Some(unsafe {
-                    std::str::from_utf8_unchecked(
-                        src.take()
-                            .expect("early return protects us from take being None"),
-                    )
-                })
-            }
-        })
-        .map(|seq| {
-            let (description, sequence) = final_parser(pair(comment_line, sequence_block))(seq)?;
-            Ok(Self {
-                description,
-                sequence,
-            })
-        })
-        .collect::<_>()
-    }
-}
-
-impl<T> Fasta<T>
-where
-    T: Sequence + Send,
-{
-    /// Parses a string slice as a [`Fasta`] formatted document.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the [`Sequence`]
-    /// parse implementation returns an error
     #[cfg(feature = "rayon")]
     pub fn parse(src: &str) -> Result<Vec<Self>, FastaError> {
         use tracing::trace;
 
-        let mut src = Some(src.as_bytes());
-        std::iter::from_fn(move || {
-            let this = src?;
-            if let Some(pos) = memchr::memchr2(b'>', b';', &this[1..]) {
-                trace!("Found FASTA block at {pos}");
-                let (ret, rem) = this.split_at(pos);
-                src = Some(rem);
-                //SAFETY: `src` was originally valid UTF-8 when converted to an &[u8] by `as_bytes`
-                //and is only split in such a way that the resulting string is still valid UTF-8
-                Some(unsafe { std::str::from_utf8_unchecked(ret) })
-            } else {
-                //SAFETY: Same as above
-                trace!("Yielding last FASTA block");
-                Some(unsafe {
-                    std::str::from_utf8_unchecked(
-                        src.take()
-                            .expect("early return prevents take from being None"),
-                    )
-                })
-            }
-        })
-        .collect::<Vec<_>>()
-        .into_par_iter()
-        .map(|seq| {
-            let (description, sequence) = final_parser(pair(comment_line, sequence_block))(seq)?;
-            trace!("Successfully parsed a FASTA block");
-            Ok(Self {
-                description,
-                sequence,
-            })
-        })
-        .collect::<_>()
+        final_parser(many1(pair(comment_line, sequence_block).map(
+            |(description, sequence)| {
+                trace!("Successfully parsed a FASTA block");
+                Self {
+                    description,
+                    sequence,
+                }
+            },
+        )))(src)
     }
 }
 
