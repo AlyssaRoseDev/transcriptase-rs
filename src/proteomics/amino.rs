@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use crate::err::{TXaseError, TXaseResult};
-
 use self::translation::{DNA_TRANSLATION_TABLE, RNA_TRANSLATION_TABLE};
 mod translation;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,23 +83,23 @@ impl AminoAcid {
         Self::LONG[self as usize]
     }
 
-    pub fn translate_rna(codon: &str) -> TXaseResult<Self> {
+    pub fn translate_rna(codon: &str) -> Result<Self, String> {
         RNA_TRANSLATION_TABLE
             .get(codon)
             .copied()
-            .ok_or_else(|| TXaseError::InvalidCodon(codon.to_string()))
+            .ok_or_else(|| format!("Invalid RNA codon: {codon}"))
     }
 
-    pub fn translate_dna(codon: &str) -> TXaseResult<Self> {
+    pub fn translate_dna(codon: &str) -> Result<Self, String> {
         DNA_TRANSLATION_TABLE
             .get(codon)
             .copied()
-            .ok_or_else(|| TXaseError::InvalidCodon(codon.to_string()))
+            .ok_or_else(|| format!("Invalid RNA codon: {codon}"))
     }
 }
 
 impl FromStr for AminoAcid {
-    type Err = TXaseError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -128,11 +126,7 @@ impl FromStr for AminoAcid {
             "Selenocysteine" | "Sec" | "U" => Self::Selenocysteine,
             "Pyrrolysine" | "Pyl" | "O" => Self::Pyrrolysine,
             "Amber" | "Ochre" | "Umber" | "Opal" | "Ter" | "*" => Self::Stop,
-            _ => {
-                return Err(TXaseError::InternalParseFailure(format!(
-                    "Failed to parse {s} as an Amino Acid"
-                )))
-            }
+            _ => return Err(format!("Failed to parse {s} as an Amino Acid")),
         })
     }
 }

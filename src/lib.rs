@@ -2,7 +2,6 @@
 
 use nom::{error::VerboseError, IResult};
 
-pub mod err;
 pub mod fasta;
 pub mod fastq;
 pub mod genomics;
