@@ -40,7 +40,15 @@ impl ExtractContext<&str, FastaError> for VerboseError<&str> {
             "Unknown Error Kind; This is a bug and should be reported!"
         };
         FastaError {
-            msg: reason.into(),
+            msg: format!(
+                "{reason} ({})",
+                if let VerboseErrorKind::Nom(e) = kind {
+                    e.description()
+                } else {
+                    ""
+                }
+            )
+            .into_boxed_str(),
             src: NamedSource::new(reason, original_input.to_string()),
             err_loc: original_input
                 .find(fail)
@@ -76,15 +84,19 @@ where
     pub fn parse(src: &str) -> Result<Vec<Self>, FastaError> {
         use tracing::trace;
 
-        final_parser(many1(pair(comment_line, sequence_block).map(
-            |(description, sequence)| {
-                trace!("Successfully parsed a FASTA block");
-                Self {
-                    description,
-                    sequence,
-                }
-            },
-        )))(src)
+        final_parser(delimited(
+            multispace0,
+            many1(
+                pair(comment_line, sequence_block).map(|(description, sequence)| {
+                    trace!("Successfully parsed a FASTA block");
+                    Self {
+                        description,
+                        sequence,
+                    }
+                }),
+            ),
+            multispace0,
+        ))(src)
     }
 }
 
@@ -111,7 +123,6 @@ where
     T: Sequence,
 {
     many1(sequence_line::<T>)
-        .all_consuming()
         .map(|lines| {
             lines
                 .iter()
@@ -133,7 +144,6 @@ where
     T: Sequence,
 {
     many1(sequence_line::<T>)
-        .all_consuming()
         .map(|lines| {
             lines
                 .par_iter()
