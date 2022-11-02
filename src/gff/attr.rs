@@ -1,10 +1,32 @@
-use std::{borrow::Borrow, fmt};
+use nom::{
+    branch::alt,
+    bytes::complete::{take_until, take_while},
+    character::complete::{char, one_of},
+    combinator::{eof, map, value},
+    error::VerboseError,
+    multi::separated_list1,
+    sequence::{pair, separated_pair},
+    Parser,
+};
+use std::{borrow::Borrow, fmt, str::FromStr};
+use tracing::trace;
 
-use nom_supreme::final_parser::final_parser;
+use nom::{
+    bytes::complete::is_not,
+    character::complete::digit1,
+    combinator::map_res,
+    sequence::{terminated, tuple},
+};
+use nom_supreme::{
+    final_parser::final_parser, multi::parse_separated_terminated_res, tag::complete::tag,
+};
 
-use crate::gff::{
-    parsers::{strand, ParseError},
-    Strand,
+use crate::{
+    gff::{
+        parsers::{strand, ParseError},
+        Strand,
+    },
+    NomResult,
 };
 
 use super::{GffError, UnescapedString};
@@ -33,91 +55,84 @@ pub struct TargetAttr {
     strand: Option<Strand>,
 }
 
-impl fmt::Display for TargetAttr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:#?}", self)
-    }
-}
-
 impl AttributeSet {
     #[tracing::instrument]
     pub(crate) fn parse(src: &str) -> Result<Self, GffError> {
-        let mut attrs = AttributeSet::default();
-        let attr_iter = src
-            .split(';')
-            .flat_map(|attr| attr.split_once('=').ok_or(GffError::MalformedLine));
-        for (tag, value) in attr_iter {
-            match tag {
-                "ID" => attrs.id = Some(Id::new(value)),
-                "Name" => attrs.name = Some(UnescapedString::new(value)?),
-                "Alias" => attrs.alias = Some(UnescapedString::new(value)?),
-                "Parent" => attrs.parent = Some(value.split(',').map(Id::new).collect()),
-                "Target" => {
-                    let mut parts = value.split(' ');
-                    let target_id = Id::new(parts.next().ok_or(GffError::InvalidAttribute)?);
-                    let start = parts
-                        .next()
-                        .ok_or(GffError::MalformedTarget)?
-                        .parse()
-                        .map_err(|_| GffError::FromStrErr)?;
-                    let end = parts
-                        .next()
-                        .ok_or(GffError::MalformedTarget)?
-                        .parse()
-                        .map_err(|_| GffError::FromStrErr)?;
-                    let strand = parts
-                        .next()
-                        .map(final_parser::<_, _, _, ParseError>(strand))
-                        .transpose()?
-                        .flatten()
-                        .map(Strand::parse)
-                        .transpose()?;
-                    attrs.target = Some(TargetAttr {
-                        target_id,
-                        start,
-                        end,
-                        strand,
-                    })
-                }
-                "Gap" => {
-                    attrs.gap = Some(
-                        value
-                            .split(' ')
-                            .map(|gap| {
-                                let (kind, len) = gap.split_at(0);
-                                Ok((
-                                    GapKind::parse(kind)?,
-                                    len.parse::<usize>().map_err(|_| GffError::FromStrErr)?,
-                                ))
-                            })
-                            .collect::<Result<Vec<_>, GffError>>()?,
-                    )
-                }
-                "Derives_from" => attrs.derives_from = Some(Id::new(value)),
-                "Note" => attrs.note = Some(UnescapedString::new(value)?),
-                "Dbxref" => attrs.dbx_ref = Some(UnescapedString::new(value)?),
-                "Ontology_term" => attrs.ontology_term = Some(UnescapedString::new(value)?),
-                "Is_circular" => match value {
-                    "true" => attrs.is_circular = Some(true),
-                    "false" => attrs.is_circular = Some(false),
-                    _ => return Err(GffError::IsCircularNotBool),
+        let attrs =
+            final_parser::<_, _, VerboseError<&str>, ParseError>(parse_separated_terminated_res(
+                Self::get_key_val,
+                tag(";"),
+                eof,
+                AttributeSet::default,
+                |mut attrs, (key, val)| {
+                    match key {
+                        "ID" => attrs.id = Some(Id::new(val)),
+                        "Name" => attrs.name = Some(UnescapedString::new(val)?),
+                        "Alias" => attrs.alias = Some(UnescapedString::new(val)?),
+                        "Parent" => {
+                            attrs.parent =
+                                Some(final_parser::<_, _, VerboseError<&str>, ParseError>(
+                                    separated_list1(char(','), map(is_not(","), Id::new)),
+                                )(val)?)
+                        }
+                        "Target" => {
+                            attrs.target =
+                                Some(final_parser::<_, _, VerboseError<&str>, ParseError>(
+                                    TargetAttr::parse,
+                                )(val)?)
+                        }
+                        "Gap" => {
+                            attrs.gap = Some(final_parser::<_, _, VerboseError<&str>, ParseError>(
+                                separated_list1(
+                                    char(' '),
+                                    pair(
+                                        map(one_of("MIDFR"), GapKind::parse_unwrap),
+                                        map_res(digit1::<&str, _>, usize::from_str),
+                                    ),
+                                ),
+                            )(val)?)
+                        }
+                        "Derives_from" => attrs.derives_from = Some(Id::new(val)),
+                        "Note" => attrs.note = Some(UnescapedString::new(val)?),
+                        "Dbxref" => attrs.dbx_ref = Some(UnescapedString::new(val)?),
+                        "Ontology_term" => attrs.ontology_term = Some(UnescapedString::new(val)?),
+                        "Is_circular" => {
+                            attrs.is_circular =
+                                final_parser::<_, _, VerboseError<&str>, ParseError>(map(
+                                    alt((value(true, tag("true")), value(false, tag("false")))),
+                                    Some,
+                                ))(val)?;
+                        }
+                        tag if tag
+                            .chars()
+                            .next()
+                            .ok_or(GffError::MalformedLine)?
+                            .is_ascii_uppercase() =>
+                        {
+                            return Err(GffError::ReservedAttribute)
+                        }
+                        tag => attrs
+                            .other
+                            .get_or_insert(Vec::new())
+                            .push((tag.into(), UnescapedString::new(val)?)),
+                    };
+                    Ok(attrs)
                 },
-                tag if tag
-                    .chars()
-                    .next()
-                    .ok_or(GffError::MalformedLine)?
-                    .is_ascii_uppercase() =>
-                {
-                    return Err(GffError::ReservedAttribute)
-                }
-                tag => attrs
-                    .other
-                    .get_or_insert(Vec::new())
-                    .push((tag.into(), UnescapedString::new(value)?)),
-            }
-        }
+            ))(src)?;
         tracing::debug!("{}", attrs);
         Ok(attrs)
+    }
+
+    #[tracing::instrument]
+    fn get_key_val<'source, 'ret>(chunk: &'source str) -> NomResult<'ret, (&'ret str, &'ret str)>
+    where
+        'source: 'ret,
+    {
+        //todo: make this detect actual allowed and not allowed things :3
+        let (ret, this) =
+            separated_pair(take_until("="), char('='), take_while(|c| c != ';')).parse(chunk)?;
+        trace!("Returning ({}, {}), Remaining: \"{ret}\"", this.0, this.1);
+        Ok((ret, this))
     }
 }
 
@@ -173,6 +188,30 @@ impl fmt::Display for AttributeSet {
     }
 }
 
+impl TargetAttr {
+    fn parse(src: &str) -> NomResult<'_, Self> {
+        tuple((
+            map(terminated(is_not(" "), tag(" ")), Id::new),
+            map_res(terminated(digit1, tag(" ")), FromStr::from_str),
+            map_res(terminated(digit1, tag(" ")), FromStr::from_str),
+            map_res(strand, |s| s.map(Strand::parse).transpose()),
+        ))
+        .map(|(target_id, start, end, strand)| Self {
+            target_id,
+            start,
+            end,
+            strand,
+        })
+        .parse(src)
+    }
+}
+
+impl fmt::Display for TargetAttr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#?}", self)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Id(Box<str>);
 
@@ -218,14 +257,18 @@ impl fmt::Display for GapKind {
 
 impl GapKind {
     #[tracing::instrument]
-    pub fn parse(src: &str) -> Result<Self, GffError> {
+    pub fn parse(src: char) -> Result<Self, GffError> {
         Ok(match src {
-            "M" => Self::Match,
-            "I" => Self::Insert,
-            "D" => Self::Delete,
-            "F" => Self::FwdFrameShift,
-            "R" => Self::RevFrameShift,
+            'M' => Self::Match,
+            'I' => Self::Insert,
+            'D' => Self::Delete,
+            'F' => Self::FwdFrameShift,
+            'R' => Self::RevFrameShift,
             _ => return Err(GffError::InvalidGapKind),
         })
+    }
+
+    fn parse_unwrap(src: char) -> Self {
+        Self::parse(src).unwrap()
     }
 }

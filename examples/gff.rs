@@ -11,11 +11,9 @@ pub fn main() -> Result<()> {
                 .with_bracketed_fields(true),
         )
         .init();
-    let path = std::env::args()
-        .skip(1)
-        .next()
+    let path = std::env::args().nth(1)
         .expect("A Path must be provided");
     let mut file = std::fs::File::open(path).unwrap();
-    let _ = GFF::parse(&mut file)?;
+    let _ = GFF::read_from(&mut file)?;
     Ok(())
 }

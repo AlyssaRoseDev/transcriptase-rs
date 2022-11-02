@@ -13,10 +13,9 @@ pub(crate) const DNA_CODONS: [char; 16] = [
     '0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N',
 ];
 
-/// The 16 degenerate base symbols that can occur in DNA as defined by the ["Nomencalture for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
+/// The 16 degenerate base symbols that can occur in DNA as defined by the ["Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum DNA {
     /// A gap in the sequence
     Gap = 0x0,
@@ -159,7 +158,7 @@ pub(crate) const RNA_CODONS: [char; 16] = [
     '0', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'U', 'W', 'Y', 'H', 'K', 'D', 'B', 'N',
 ];
 
-/// The 16 degenerate base symbols that can occur in RNA as defined by the ["Nomencalture for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
+/// The 16 degenerate base symbols that can occur in RNA as defined by the ["Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984"](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC322779)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum RNA {
@@ -179,19 +178,19 @@ pub enum RNA {
     Strong = 0x6,
     /// Any one of Adenine, Cytosine, or Guanine
     NotU = 0x7,
-    /// A Thymine nucleotide
+    /// A Uracil nucleotide
     Uracil = 0x8,
-    /// Either Adenine or Thymine
+    /// Either Adenine or Uracil
     Weak = 0x9,
-    /// Either Cytosine or Thymine
+    /// Either Cytosine or Uracil
     Pyrimidine = 0xA,
-    /// Any one of Adenine, Cytosine, or Thymine
+    /// Any one of Adenine, Cytosine, or Uracil
     NotG = 0xB,
-    /// Either Guanine or Thymine
+    /// Either Guanine or Uracil
     Ketone = 0xC,
-    /// Any one of Adenine, Guanine, or Thymine
+    /// Any one of Adenine, Guanine, or Uracil
     NotC = 0xD,
-    /// Any one of Cytosine, Guanine, or Thymine
+    /// Any one of Cytosine, Guanine, or Uracil
     NotA = 0xE,
     /// Any DNA nucleotide
     #[default]

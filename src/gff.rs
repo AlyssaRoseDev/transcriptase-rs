@@ -56,7 +56,7 @@ pub struct GFF {
 impl GFF {
     /// Attempts to parse the given [`Reader`](std::io::Read) as a GFFv3-formatted input
     #[tracing::instrument(skip_all)]
-    pub fn parse(src: &mut impl Read) -> Result<Self, GffError> {
+    pub fn read_from(src: &mut impl Read) -> Result<Self, GffError> {
         let mut temp = String::new();
         src.read_to_string(&mut temp)?;
         temp.parse()
@@ -81,7 +81,7 @@ impl FromStr for GFF {
                     }
                 }
             } else {
-                entries.push(Entry::from_str(line)?)
+                entries.push(line.parse()?)
             }
         }
 

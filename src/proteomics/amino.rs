@@ -4,7 +4,6 @@ use self::translation::{DNA_TRANSLATION_TABLE, RNA_TRANSLATION_TABLE};
 mod translation;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-#[allow(clippy::module_name_repetitions)]
 pub enum AminoAcid {
     Alanine,
     Arginine,
@@ -94,7 +93,7 @@ impl AminoAcid {
         DNA_TRANSLATION_TABLE
             .get(codon)
             .copied()
-            .ok_or_else(|| format!("Invalid RNA codon: {codon}"))
+            .ok_or_else(|| format!("Invalid DNA codon: {codon}"))
     }
 }
 
