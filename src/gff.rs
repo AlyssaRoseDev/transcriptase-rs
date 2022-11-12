@@ -1,10 +1,29 @@
-use std::{fmt, io::Read, ops::Range, str::FromStr};
+use std::{
+    fmt,
+    io::Read,
+    ops::{Deref, DerefMut, Range},
+    str::FromStr,
+};
 
 use attr::AttributeSet;
 use meta::Metadata;
 use miette::Diagnostic;
-use nom::{bytes::complete::is_a, Parser};
+use nom::{
+    branch::alt,
+    character::complete::{line_ending, not_line_ending},
+    combinator::{map, map_res, value},
+    error::VerboseError,
+    sequence::{delimited, tuple},
+    Parser,
+};
+use nom_supreme::{
+    final_parser::final_parser, multi::parse_separated_terminated_res, tag::complete::tag,
+};
 use thiserror::Error;
+
+use crate::NomResult;
+
+use self::parsers::ParseError;
 
 pub mod attr;
 pub mod meta;
@@ -20,7 +39,7 @@ pub enum GffError {
     DuplicateSequence,
     #[error("Invalid Genome Build")]
     InvalidGenomeBuild,
-    #[error("{0}")]
+    #[error(transparent)]
     ParseError(#[from] parsers::ParseError),
     #[error("Failed to decode an escaped string")]
     StringDecodeErr,
@@ -45,7 +64,7 @@ pub enum GffError {
 }
 
 /// A Generic Feature Format Version 3 file including both metadata and entries
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct GFF {
     /// A list of the [`Metadata`]
     pub metadata: Metadata,
@@ -57,9 +76,38 @@ impl GFF {
     /// Attempts to parse the given [`Reader`](std::io::Read) as a GFFv3-formatted input
     #[tracing::instrument(skip_all)]
     pub fn read_from(src: &mut impl Read) -> Result<Self, GffError> {
-        let mut temp = String::new();
-        src.read_to_string(&mut temp)?;
-        temp.parse()
+        std::io::read_to_string(src)?.parse()
+    }
+
+    fn parse(src: &str) -> Result<Self, GffError> {
+        final_parser::<_, _, VerboseError<&str>, ParseError>(parse_separated_terminated_res(
+            not_line_ending,
+            line_ending,
+            delimited(line_ending, tag("###"), line_ending),
+            GFF::default,
+            Self::parse_line,
+        ))(src)
+        .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn parse_line(mut self, line: &str) -> Result<Self, GffError> {
+        final_parser::<_, _, VerboseError<&str>, ParseError>(alt((
+            //parse meta
+            map_res(
+                tuple((
+                    alt((value(false, tag("##")), value(true, tag("#!")))),
+                    not_line_ending,
+                )),
+                |(is_domain, meta)| -> Result<(), GffError> {
+                    self.metadata.parse_line(is_domain, meta)
+                },
+            ),
+            map(Entry::parse, |entry| {
+                self.entries.push(entry);
+            }),
+        )))(line)?;
+        Ok(self)
     }
 }
 
@@ -68,24 +116,7 @@ impl FromStr for GFF {
 
     #[tracing::instrument(skip_all)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut metadata = Metadata::default();
-        let mut entries = Vec::new();
-        for line in s.lines() {
-            if let Ok((tag, meta)) = is_a::<_, _, ()>("#").parse(line) {
-                match tag {
-                    "###" => break,
-                    "##" => metadata.parse_metadata(meta)?,
-                    "#" if meta.starts_with('!') => metadata.parse_domain_metadata(meta)?,
-                    _ => {
-                        continue;
-                    }
-                }
-            } else {
-                entries.push(line.parse()?)
-            }
-        }
-
-        Ok(GFF { metadata, entries })
+        Self::parse(s)
     }
 }
 #[derive(Debug, Clone)]
@@ -102,22 +133,24 @@ pub struct Entry {
 
 impl Entry {
     #[tracing::instrument]
-    pub(crate) fn parse(src: &str) -> Result<Self, GffError> {
+    pub(crate) fn parse(src: &str) -> NomResult<'_, Self> {
         // GFF Entry line:
-        // {seq_id} {source} {type} {start} {end} {score?} {strand} {phase?} {attributes[]}
-        let (seq, source, feature_type, range_start, range_end, score, strand, phase, attributes) =
-            parsers::entry(src)?;
-        let attrs = AttributeSet::parse(attributes)?;
-        Ok(Self {
-            seq_id: UnescapedString::new(seq)?,
-            source: UnescapedString::new(source)?,
-            feature_type: UnescapedString::new(feature_type)?,
-            range: range_start..range_end,
-            score,
-            strand: strand.map(Strand::parse).transpose()?,
-            phase,
-            attrs,
-        })
+        // {seq_id} {source} {type} {start} {end} {score?} {strand?} {phase?} {attributes[]}
+        map_res(
+            parsers::entry,
+            |(seq, source, feature, range_s, range_e, score, strand, phase, attrs)| -> Result<_, GffError> {
+                Ok(Self {
+                    seq_id: UnescapedString::new(seq)?,
+                    source: UnescapedString::new(source)?,
+                    feature_type: UnescapedString::new(feature)?,
+                    range: range_s..range_e,
+                    score,
+                    strand: strand.map(Strand::parse).transpose()?,
+                    phase,
+                    attrs: AttributeSet::parse(attrs)?,
+                })
+            },
+        ).parse(src)
     }
 }
 
@@ -125,7 +158,9 @@ impl FromStr for Entry {
     type Err = GffError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Entry::parse(s)
+        Ok(final_parser::<_, _, VerboseError<&str>, ParseError>(
+            Entry::parse,
+        )(s)?)
     }
 }
 
@@ -152,7 +187,7 @@ impl Strand {
 pub struct UnescapedString(Box<str>);
 
 impl UnescapedString {
-    #[tracing::instrument(name = "UnescapedString::new")]
+    #[tracing::instrument(name = "UnescapedString::new", level = "trace")]
     pub fn new(src: &str) -> Result<Self, GffError> {
         if src.contains('%') {
             let mut escaped = src.to_owned();
@@ -173,6 +208,32 @@ impl UnescapedString {
 
 impl fmt::Display for UnescapedString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0.as_ref())
+        f.write_str(self)
+    }
+}
+
+impl AsRef<str> for UnescapedString {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsMut<str> for UnescapedString {
+    fn as_mut(&mut self) -> &mut str {
+        self.0.as_mut()
+    }
+}
+
+impl Deref for UnescapedString {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl DerefMut for UnescapedString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
     }
 }

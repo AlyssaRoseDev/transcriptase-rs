@@ -6,9 +6,10 @@ use std::{
 use super::{GffError, UnescapedString};
 use crate::gff::parsers::ParseError;
 use nom::{
+    branch::alt,
     bytes::complete::is_a,
-    character::complete::char,
-    combinator::map,
+    character::complete::{char, u8 as parse_u8},
+    combinator::{map, value},
     error::VerboseError,
     sequence::{preceded, separated_pair},
 };
@@ -27,11 +28,20 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn parse_line(&mut self, domain: bool, src: &str) -> Result<(), GffError> {
+        if domain {
+            self.parse_domain_metadata(src)
+        } else {
+            self.parse_metadata(src)
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
     pub(crate) fn parse_metadata(&mut self, line: &str) -> Result<(), GffError> {
         let (kind, rem) = line.split_once(' ').ok_or(GffError::MalformedLine)?;
         match kind {
-            "gff-version" => self.version = Some(Metadata::parse_version(rem)?),
+            "gff-version" => self.version = Metadata::parse_version(rem)?,
             "sequence-region" => {
                 let (seq_id, range) = Metadata::parse_sequence_region(rem)?;
                 if let Some(ref mut map) = self.sequence_regions {
@@ -63,8 +73,15 @@ impl Metadata {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn parse_domain_metadata(&mut self, line: &str) -> Result<(), GffError> {
         let (key, val) = line.split_once(' ').ok_or(GffError::MalformedLine)?;
+        if key == "spec-version" {
+            self.version = Some(final_parser::<_, _, VerboseError<&str>, ParseError>(
+                separated_pair(parse_u8, char('.'), parse_u8),
+            )(val)?);
+            return Ok(());
+        }
         if let Some(ref mut map) = self.other_meta {
             match map.entry(UnescapedString::new(key)?) {
                 Entry::Occupied(_) => {
@@ -81,19 +98,17 @@ impl Metadata {
         Ok(())
     }
 
-    fn parse_version(ver: &str) -> Result<(u8, u8), GffError> {
-        final_parser::<_, _, VerboseError<_>, ParseError>(preceded(
-            tag("3."),
-            separated_pair(
-                nom::character::complete::u8,
-                char('.'),
-                nom::character::complete::u8,
+    fn parse_version(ver: &str) -> Result<Option<(u8, u8)>, ParseError> {
+        final_parser::<_, _, VerboseError<&str>, ParseError>(alt((
+            preceded(
+                tag("3."),
+                map(separated_pair(parse_u8, char('.'), parse_u8), Some),
             ),
-        ))(ver)
-        .map_err(Into::into)
+            value(None, tag("3")),
+        )))(ver)
     }
 
-    fn parse_sequence_region(seq_region: &str) -> Result<(&str, Range<u64>), GffError> {
+    fn parse_sequence_region(seq_region: &str) -> Result<(&str, Range<u64>), ParseError> {
         const VALID: &str =
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:^*$@!+_?-|%>";
         final_parser::<_, _, VerboseError<&str>, ParseError>(map(
@@ -108,6 +123,5 @@ impl Metadata {
             ),
             |(seq_id, (start, end))| (seq_id, start..end),
         ))(seq_region)
-        .map_err(Into::into)
     }
 }

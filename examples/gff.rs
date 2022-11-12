@@ -1,3 +1,4 @@
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
 
 use miette::Result;
@@ -11,9 +12,13 @@ pub fn main() -> Result<()> {
                 .with_bracketed_fields(true),
         )
         .init();
-    let path = std::env::args().nth(1)
-        .expect("A Path must be provided");
+    let path = std::env::args().nth(1).expect("A Path must be provided");
     let mut file = std::fs::File::open(path).unwrap();
-    let _ = GFF::read_from(&mut file)?;
+    let gff = GFF::read_from(&mut file)?;
+    info!(
+        "Parsed {} sequence(s) with {} entries",
+        gff.metadata.sequence_regions.unwrap().len(),
+        gff.entries.len()
+    );
     Ok(())
 }

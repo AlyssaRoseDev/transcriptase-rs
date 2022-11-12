@@ -17,8 +17,7 @@ fn main() -> Result<()> {
         )
         .init();
     let mut sra_data = String::new();
-    let path = std::env::args().nth(1)
-        .expect("A Path must be provided");
+    let path = std::env::args().nth(1).expect("A Path must be provided");
     std::fs::File::open(path)
         .unwrap()
         .read_to_string(&mut sra_data)

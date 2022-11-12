@@ -9,10 +9,7 @@ use nom::{
     sequence::{terminated, tuple},
     Parser,
 };
-use nom_supreme::{
-    final_parser::{final_parser, ExtractContext},
-    ParserExt,
-};
+use nom_supreme::{final_parser::ExtractContext, ParserExt};
 use thiserror::Error;
 
 use crate::NomResult;
@@ -29,14 +26,14 @@ pub struct ParseError {
 
 impl ExtractContext<&str, ParseError> for VerboseError<&str> {
     fn extract_context(self, original_input: &str) -> ParseError {
-        let kind = &self.errors[0].1;
-        let (fail, ctx) = &self.errors[1];
-        let reason = if let VerboseErrorKind::Context(ctx) = ctx {
-            ctx
-        } else if let VerboseErrorKind::Nom(e) = kind {
-            e.description()
-        } else {
-            "Unknown Error Kind; This is a bug and should be reported!"
+        let (fail, kind) = &self
+            .errors
+            .get(1)
+            .unwrap_or_else(|| self.errors.get(0).expect("There is at least one error"));
+        let reason = match kind {
+            VerboseErrorKind::Context(ctx) => ctx,
+            VerboseErrorKind::Nom(e) => e.description(),
+            _ => "Unknown Error Kind; This is a bug and should be reported!",
         };
         ParseError {
             msg: reason.into(),
@@ -128,8 +125,8 @@ type RawEntry<'a> = (
     &'a str,
 );
 
-pub(crate) fn entry(src: &str) -> Result<RawEntry<'_>, ParseError> {
-    final_parser(tuple((
+pub(crate) fn entry(src: &str) -> NomResult<'_, RawEntry<'_>> {
+    tuple((
         terminated(seq_id, tag("\t")),
         terminated(source, tag("\t")),
         terminated(feature_type, tag("\t")),
@@ -139,5 +136,6 @@ pub(crate) fn entry(src: &str) -> Result<RawEntry<'_>, ParseError> {
         terminated(strand, tag("\t")),
         terminated(phase, tag("\t")),
         attributes,
-    )))(src)
+    ))
+    .parse(src)
 }
